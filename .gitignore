@@ -80,3 +80,6 @@ memory/test_credentials.md
 
 # Mobile development
 android-sdk/
+# Distributor role routes (must be tracked)
+!frontend/app/dist/
+!frontend/app/dist/**

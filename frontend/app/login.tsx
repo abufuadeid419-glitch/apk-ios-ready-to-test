@@ -1,6 +1,6 @@
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { TextInput, useWindowDimensions, View } from "react-native";
 import { useReanimatedKeyboardAnimation } from "react-native-keyboard-controller";
 import Animated, { interpolate, useAnimatedStyle } from "react-native-reanimated";
@@ -11,7 +11,34 @@ import { KeyboardScreen } from "@/src/components/KeyboardScreen";
 import { DeviceConflictSheet } from "@/src/components/DeviceConflictSheet";
 import { isValidCallingCode } from "@/src/phone";
 import { fonts, makeStyles, radius, spacing, useTheme } from "@/src/theme";
-import { Btn, Field, Ionicons, T } from "@/src/ui";
+import { Badge, Btn, Field, Ionicons, T } from "@/src/ui";
+import { storage } from "@/src/utils/storage";
+import { TRIAL_INTENT_KEY } from "@/src/pro";
+
+// Free Pro trial offer for new owners: tapping it remembers the intent (the activation screen then
+// leads with the trial form) and focuses the phone field so sign-up starts right away.
+function TrialOffer({ picked, onPick }: { picked: boolean; onPick: () => void }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
+  return (
+    <View style={styles.trial} testID="login-trial-offer">
+      <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+        <Ionicons name="diamond-outline" size={20} color={colors.brandPrimary} />
+        <T v="label" style={{ flex: 1, fontSize: 16 }}>جرّب Pro مجاناً لمدة 14 يوماً</T>
+        <Badge text="مجاناً" tone="pro" />
+      </View>
+      <T v="caption">للمالكين الجدد: كل ميزات Pro بدون بطاقة دفع. سجّل برقمك ثم أدخل اسم مؤسستك وابدأ فوراً.</T>
+      {picked ? (
+        <View testID="login-trial-picked" style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs }}>
+          <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+          <T v="caption" color="success" style={{ flex: 1 }}>تم اختيار التجربة المجانية — أدخل رقمك بالأسفل للمتابعة</T>
+        </View>
+      ) : (
+        <Btn testID="login-start-trial-button" small variant="secondary" icon="rocket-outline" title="ابدأ تجربتك المجانية" onPress={onPick} />
+      )}
+    </View>
+  );
+}
 
 const HERO =
   "https://images.unsplash.com/photo-1587293852726-70cdb56c2866?crop=entropy&cs=srgb&fm=jpg&q=85&w=1200";
@@ -87,6 +114,13 @@ function PhoneAuth() {
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [wait, setWait] = useState(0);
+  const [trialPicked, setTrialPicked] = useState(false);
+  const phoneRef = useRef<TextInput>(null);
+  const pickTrial = () => {
+    setTrialPicked(true);
+    storage.setItem(TRIAL_INTENT_KEY, true);
+    phoneRef.current?.focus();
+  };
 
   useEffect(() => {
     if (wait <= 0) return;
@@ -176,6 +210,7 @@ function PhoneAuth() {
     "phone-step",
     <>
       <Features />
+      <TrialOffer picked={trialPicked} onPick={pickTrial} />
       <View style={{ gap: spacing.sm, marginTop: spacing.md }}>
         <T v="label" color="onSurfaceSecondary">رقم الهاتف</T>
         <View style={{ flexDirection: "row-reverse", gap: spacing.sm }}>
@@ -188,6 +223,7 @@ function PhoneAuth() {
           />
           <TextInput
             testID="login-phone-input"
+            ref={phoneRef}
             value={local}
             onChangeText={(t) => setLocal(t.replace(/[^\d]/g, "").slice(0, 12))}
             keyboardType="phone-pad"
@@ -229,5 +265,6 @@ const useStyles = makeStyles((c) => ({
   hero: { overflow: "hidden", backgroundColor: c.surfaceInverse },
   logo: { width: 56, height: 56, borderRadius: radius.md, backgroundColor: c.brandPrimary, alignItems: "center", justifyContent: "center", marginBottom: spacing.md },
   body: { padding: spacing.xl, gap: spacing.xl },
+  trial: { gap: spacing.sm, padding: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: c.brandPrimary, backgroundColor: c.brandTertiary },
   fIcon: { width: 40, height: 40, borderRadius: radius.md, backgroundColor: c.brandTertiary, alignItems: "center", justifyContent: "center" },
 }));

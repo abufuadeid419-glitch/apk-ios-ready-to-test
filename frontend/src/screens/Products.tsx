@@ -4,6 +4,7 @@ import { FlatList, RefreshControl, View } from "react-native";
 
 import { money } from "@/src/api";
 import { StockLog } from "@/src/components/StockLog";
+import { SupplierStatementsSheet } from "@/src/components/SupplierStatements";
 import { useApi, useBottomChrome, useMutate } from "@/src/hooks";
 import { spacing, useTheme } from "@/src/theme";
 import { Badge, Btn, Empty, ErrorBox, Field, Header, IconBtn, Loading, Row, Segments, Select, Sheet, T, useToast } from "@/src/ui";
@@ -27,6 +28,7 @@ export default function Products() {
   const bottom = useBottomChrome();
   const toast = useToast();
   const [tab, setTab] = useState<"products" | "purchases" | "returns" | "movements">("products");
+  const [suppliers, setSuppliers] = useState(false);
   const products = useApi<any[]>("/products");
   const purchases = useApi<any[]>("/purchases");
   const [edit, setEdit] = useState<any | null>(null);
@@ -107,6 +109,7 @@ export default function Products() {
         subtitle="المنتجات والمستودع"
         right={
           <>
+            <IconBtn testID="supplier-statements-button" icon="storefront-outline" onPress={() => setSuppliers(true)} />
             <IconBtn testID="add-purchase-button" icon="download-outline" onPress={() => setBuy({ product_id: null, quantity: "", unit_cost: "", supplier: "" })} />
             <IconBtn testID="add-product-button" icon="add" tone="brand" onPress={() => open()} />
           </>
@@ -215,6 +218,7 @@ export default function Products() {
           </>
         )}
       </Sheet>
+      <SupplierStatementsSheet visible={suppliers} onClose={() => setSuppliers(false)} />
     </View>
   );
 }

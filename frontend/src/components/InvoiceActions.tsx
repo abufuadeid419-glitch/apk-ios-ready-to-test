@@ -10,7 +10,7 @@ function waText(doc: any, org: any) {
     `التاريخ: ${fmtDate(doc.created_at)}`,
     `العميل: ${doc.customer_name}`,
     "",
-    ...doc.items.map((i: any) => `• ${i.product_name} × ${money(i.quantity)} = ${money(i.total)}`),
+    ...doc.items.map((i: any) => `• ${i.product_name} × ${money(i.quantity)} ${i.unit_label || (i.unit === "PACKAGE" ? "كرتونة" : "قطعة")} = ${money(i.total)}`),
     "",
     `الإجمالي: ${money(doc.total)}`,
   ];

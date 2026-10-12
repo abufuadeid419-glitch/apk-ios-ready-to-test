@@ -134,9 +134,13 @@ export function invoiceReceipt(doc: any, org: any, logo: string | null, customer
   if (doc.payment_type) r.kv("طريقة الدفع", doc.payment_type === "CASH" ? "نقدي" : "آجل");
   r.hr();
   r.push({ t: "ih", a: "الصنف", b: "الكمية × السعر = الإجمالي" });
-  doc.items.forEach((it: any, i: number) =>
-    r.push({ t: "item", title: `${i + 1}. ${it.product_name}`, rows: [{ label: `${money(it.quantity)} × ${money(it.price)}`, value: money(it.total) }] }),
-  );
+  doc.items.forEach((it: any, i: number) => {
+    // Unit label per line (e.g. "2 كرتونة × 12,000") so the customer sees exactly what was sold.
+    const unit = it.unit_label || (it.unit === "PACKAGE" ? "كرتونة" : "قطعة");
+    const rows = [{ label: `${money(it.quantity)} ${unit} × ${money(it.unit_price ?? it.price)}`, value: money(it.total) }];
+    if (it.unit === "PACKAGE" && (it.pieces_per_package ?? 1) > 1) rows.push({ label: `${unit} = ${money(it.pieces_per_package)} قطعة`, value: `${money(it.pieces)} قطعة` });
+    r.push({ t: "item", title: `${i + 1}. ${it.product_name}`, rows });
+  });
   r.hr();
   if (doc.discount_amount > 0) {
     r.kv("المجموع", money(doc.subtotal));
@@ -225,5 +229,32 @@ export function statementReceipt(data: any, org: any, logo: string | null): Rece
     r.push({ t: "item", rows: [{ label: `${typeLabel[x.type] ?? x.type} ${x.ref}`, value: fmtDate(x.date) }, { label: amt, value: money(bal) }] });
   }
   footer(r, org, "توقيع المحاسب");
+  return r.page();
+}
+
+// Supplier statement built from warehouse purchases (credit = owed to supplier) and purchase returns (debit).
+export type SupplierStatement = { name: string; rows: { type: "PURCHASE" | "PURCHASE_RETURN"; ref: string; product: string; quantity: number; debit: number; credit: number; date: string }[]; balance: number };
+
+export function supplierStatementReceipt(s: SupplierStatement, org: any, logo: string | null): ReceiptDoc {
+  const r = new Receipt();
+  header(r, org, logo, "كشف حساب مورد", null, new Date().toISOString());
+  r.kv("المورد", s.name);
+  r.kv("عدد الحركات", String(s.rows.length));
+  if (s.rows.length) r.kv("الفترة", `${day(s.rows[0].date)} - ${day(s.rows[s.rows.length - 1].date)}`, { sm: true });
+  r.hr();
+  const t = s.rows.reduce((a, x) => ({ debit: a.debit + x.debit, credit: a.credit + x.credit }), { debit: 0, credit: 0 });
+  r.kv("إجمالي المشتريات", money(t.credit));
+  r.kv("إجمالي المرتجعات", money(t.debit));
+  r.kv("المستحق للمورد", `${money(s.balance)} ${cur(org)}`, { big: true });
+  r.hr();
+  if (!s.rows.length) r.text("c", "لا توجد حركات");
+  else r.push({ t: "ih", a: "الحركة", b: "الرصيد" });
+  let bal = 0;
+  for (const x of s.rows) {
+    bal += x.credit - x.debit;
+    const amt = x.credit ? `مشتريات ${money(x.credit)}` : `مرتجع ${money(x.debit)}`;
+    r.push({ t: "item", title: `${x.product} × ${money(x.quantity)}`, rows: [{ label: x.ref || (x.type === "PURCHASE" ? "مشتريات" : "مرتجع"), value: fmtDate(x.date) }, { label: amt, value: money(bal) }] });
+  }
+  footer(r, org, "توقيع المورد");
   return r.page();
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Linking, Modal, View } from "react-native";
 import { CameraView, scanFromURLAsync, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
@@ -7,8 +7,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { KeyboardScreen } from "@/src/components/KeyboardScreen";
+import { TRIAL_INTENT_KEY } from "@/src/pro";
+import { storage } from "@/src/utils/storage";
 import { spacing, useTheme } from "@/src/theme";
-import { Btn, Card, Field, Header, HeaderIconBtn, IconBtn, T, useToast } from "@/src/ui";
+import { Badge, Btn, Card, Field, Header, HeaderIconBtn, IconBtn, T, useToast } from "@/src/ui";
 
 export default function Activate() {
   const { user, setUser, logout } = useAuth();
@@ -17,6 +19,10 @@ export default function Activate() {
   const [loading, setLoading] = useState<"code" | "trial" | null>(null);
   const [scan, setScan] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [trialFirst, setTrialFirst] = useState(false);
+  useEffect(() => {
+    storage.getItem(TRIAL_INTENT_KEY, false).then((v) => setTrialFirst(!!v));
+  }, []);
   const toast = useToast();
   const { colors } = useTheme();
 
@@ -30,6 +36,7 @@ export default function Activate() {
         ? await api("/activate", { method: "POST", body: { code: theCode } })
         : await api("/trial", { method: "POST", body: { org_name: org } });
       toast("تم تفعيل الحساب بنجاح");
+      storage.removeItem(TRIAL_INTENT_KEY);
       setUser(u);
     } catch (e: any) {
       toast(e.message, "error");
@@ -58,6 +65,18 @@ export default function Activate() {
     }
   };
 
+  const trialCard = (
+    <Card style={{ gap: spacing.md }} testID="trial-card">
+      <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+        <T v="h2" style={{ flex: 1 }}>تجربة Pro مجانية 14 يوماً</T>
+        {trialFirst && <Badge testID="trial-selected-badge" text="عرضك المجاني" tone="pro" />}
+      </View>
+      <T v="caption">أنشئ مؤسستك الآن وابدأ باستخدام النظام كمالك (حتى 3 موظفين).</T>
+      <Field testID="trial-org-name-input" label="اسم المؤسسة" value={org} onChangeText={setOrg} placeholder="مثال: شركة النور للتوزيع" />
+      <Btn testID="start-trial-button" variant={trialFirst ? "primary" : "secondary"} title="ابدأ التجربة" icon="rocket-outline" onPress={() => run("trial")} loading={loading === "trial"} />
+    </Card>
+  );
+
   return (
     <KeyboardScreen
       testID="activation-screen"
@@ -65,6 +84,7 @@ export default function Activate() {
       header={<Header title="تفعيل الحساب" subtitle={user?.email} right={<HeaderIconBtn testID="activation-logout-button" icon="log-out-outline" onPress={logout} />} />}
       contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }}
     >
+        {trialFirst && trialCard}
         <Card style={{ gap: spacing.md }}>
           <T v="h2">لديك رمز تفعيل؟</T>
           <T v="caption">أدخل رمز ترخيص المؤسسة (LIC-...) إذا كنت مالكاً، أو رمز الموظف (EMP-...) الذي أرسله لك المدير.</T>
@@ -73,12 +93,7 @@ export default function Activate() {
           <Btn testID="scan-qr-button" variant="secondary" icon="qr-code-outline" title="مسح رمز QR بالكاميرا" onPress={() => setScan(true)} />
           <Btn testID="import-qr-button" variant="ghost" icon="image-outline" title="استيراد رمز QR من المعرض" loading={importing} onPress={importQr} />
         </Card>
-        <Card style={{ gap: spacing.md }}>
-          <T v="h2">تجربة مجانية 14 يوماً</T>
-          <T v="caption">أنشئ مؤسستك الآن وابدأ باستخدام النظام كمالك (حتى 3 موظفين).</T>
-          <Field testID="trial-org-name-input" label="اسم المؤسسة" value={org} onChangeText={setOrg} placeholder="مثال: شركة النور للتوزيع" />
-          <Btn testID="start-trial-button" variant="secondary" title="ابدأ التجربة" icon="rocket-outline" onPress={() => run("trial")} loading={loading === "trial"} />
-        </Card>
+        {!trialFirst && trialCard}
       <Modal visible={scan} animationType="slide" onRequestClose={() => setScan(false)}>
         <QrScan
           onClose={() => setScan(false)}

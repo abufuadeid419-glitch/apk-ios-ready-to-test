@@ -5,7 +5,7 @@ import { fmtDate, money } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { AccountButton } from "@/src/components/AccountButton";
 import { CollectSheet } from "@/src/components/CollectSheet";
-import { StatementActions } from "@/src/components/StatementActions";
+import { StatementActions, useShareStatement } from "@/src/components/StatementActions";
 import { SyncBanner } from "@/src/components/SyncBanner";
 import { isStale, useDebtReminder } from "@/src/debtReminder";
 import { useApi, useBottomChrome, useMutate } from "@/src/hooks";
@@ -99,6 +99,7 @@ export default function Customers({ debtsOnly = false }: { debtsOnly?: boolean }
   const types = useApi<any[]>("/customer-types");
   const typeName = useTypeName();
   const remind = useDebtReminder();
+  const shareSt = useShareStatement();
   const [q, setQ] = useState("");
   const [form, setForm] = useState<Form | null>(null);
   const [tried, setTried] = useState(false);
@@ -215,6 +216,7 @@ export default function Customers({ debtsOnly = false }: { debtsOnly?: boolean }
                 <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
                   <Badge text={money(item.balance)} tone={item.balance > 0 ? "warning" : "success"} />
                   {debtsOnly && item.balance > 0 && <IconBtn testID={`remind-customer-${item.id}`} icon="logo-whatsapp" tone="brand" onPress={() => remind(item)} />}
+                  {isAgent && !item.pending && <IconBtn testID={`share-statement-${item.id}`} icon={shareSt.busyId === item.id ? "hourglass-outline" : "document-text-outline"} tone="brand" onPress={() => shareSt.busyId || shareSt.share(item.id)} />}
                   {!isOwner && item.balance > 0 && <IconBtn testID={`collect-customer-${item.id}`} icon="cash-outline" onPress={() => setCollect(item)} />}
                   {canEdit && !debtsOnly && !item.pending && <IconBtn testID={`edit-customer-${item.id}`} icon="create-outline" onPress={() => { setTried(false); setForm({ ...item, typeChosen: true }); }} />}
                 </View>

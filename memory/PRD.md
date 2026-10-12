@@ -52,3 +52,12 @@ Clone the mobile app from https://github.com/abufuadeid419-glitch/apk-ios-code.g
 - Env: EXPO_PUBLIC_CONVEX_URL / EXPO_PUBLIC_CONVEX_SITE_URL / CONVEX_DEPLOY_KEY in frontend/.env.
 - Re-deployed `frontend/convex/*` to fearless-ostrich-878 (`npx convex deploy`) so live functions match the repo.
 - Smoke test passed (iteration_1): login screen, validation, legal screen, Convex /api reachable.
+- 2026-06: FIX distributor "page not found": recreated `app/dist/*` routes (source repo's .gitignore `dist/` had dropped them); added gitignore negations so they're tracked.
+- 2026-06: FIX `convex/products.ts` missing `round2` import (product create/update crashed) — redeployed.
+- 2026-06: Printed receipts show unit label per line (e.g. "2 كرتونة × price") + carton→pieces line; WhatsApp invoice text too.
+- 2026-06: Login screen free 14-day Pro trial offer card; intent stored → activation screen leads with the trial form.
+- 2026-06: Owner supplier statements (المخزون → storefront icon): grouped from purchases/purchase-returns, one-tap PDF share + full DocActions.
+- 2026-06: Distributor one-tap customer statement PDF icon on each customer row.
+- Testing: iteration_2 all green (all 4 roles, all tabs). Test accounts in memory/test_credentials.md.
+## Backlog
+- Supplier payments (سند صرف لمورد) so supplier balances reflect payments, not just purchases/returns.
