@@ -233,7 +233,22 @@ export function statementReceipt(data: any, org: any, logo: string | null): Rece
 }
 
 // Supplier statement built from warehouse purchases (credit = owed to supplier) and purchase returns (debit).
-export type SupplierStatement = { name: string; rows: { type: "PURCHASE" | "PURCHASE_RETURN"; ref: string; product: string; quantity: number; debit: number; credit: number; date: string }[]; balance: number };
+export type SupplierRow = { type: "PURCHASE" | "PURCHASE_RETURN" | "SUPPLIER_PAYMENT"; ref: string; product: string; quantity: number; debit: number; credit: number; date: string; doc?: any };
+export type SupplierStatement = { name: string; rows: SupplierRow[]; balance: number };
+const supplierRowLabel = { PURCHASE: "مشتريات", PURCHASE_RETURN: "مرتجع", SUPPLIER_PAYMENT: "دفعة" } as const;
+
+export function supplierPaymentReceipt(p: any, org: any, logo: string | null, balanceAfter?: number): ReceiptDoc {
+  const r = new Receipt();
+  header(r, org, logo, "سند صرف لمورد", p.voucher_no, p.created_at);
+  r.kv("صُرف إلى المورد", p.supplier);
+  r.kv("المبلغ المدفوع", `${money(p.amount)} ${cur(org)}`, { big: true });
+  if (p.input_currency === "USD") r.kv("المبلغ بالدولار", `${money(p.amount_input)} $ × ${money(p.exchange_rate)}`, { sm: true });
+  if (p.created_by_name) r.kv("بواسطة", p.created_by_name);
+  if (p.notes) r.text("note", `البيان: ${p.notes}`);
+  if (balanceAfter !== undefined) r.kv("المتبقي للمورد", money(balanceAfter));
+  footer(r, org, "توقيع المستلم");
+  return r.page();
+}
 
 export function supplierStatementReceipt(s: SupplierStatement, org: any, logo: string | null): ReceiptDoc {
   const r = new Receipt();
@@ -244,7 +259,9 @@ export function supplierStatementReceipt(s: SupplierStatement, org: any, logo: s
   r.hr();
   const t = s.rows.reduce((a, x) => ({ debit: a.debit + x.debit, credit: a.credit + x.credit }), { debit: 0, credit: 0 });
   r.kv("إجمالي المشتريات", money(t.credit));
-  r.kv("إجمالي المرتجعات", money(t.debit));
+  const paid = s.rows.filter((x) => x.type === "SUPPLIER_PAYMENT").reduce((a, x) => a + x.debit, 0);
+  r.kv("إجمالي المرتجعات", money(t.debit - paid));
+  r.kv("إجمالي المدفوع", money(paid));
   r.kv("المستحق للمورد", `${money(s.balance)} ${cur(org)}`, { big: true });
   r.hr();
   if (!s.rows.length) r.text("c", "لا توجد حركات");
@@ -252,8 +269,8 @@ export function supplierStatementReceipt(s: SupplierStatement, org: any, logo: s
   let bal = 0;
   for (const x of s.rows) {
     bal += x.credit - x.debit;
-    const amt = x.credit ? `مشتريات ${money(x.credit)}` : `مرتجع ${money(x.debit)}`;
-    r.push({ t: "item", title: `${x.product} × ${money(x.quantity)}`, rows: [{ label: x.ref || (x.type === "PURCHASE" ? "مشتريات" : "مرتجع"), value: fmtDate(x.date) }, { label: amt, value: money(bal) }] });
+    const amt = `${supplierRowLabel[x.type]} ${money(x.credit || x.debit)}`;
+    r.push({ t: "item", title: x.type === "SUPPLIER_PAYMENT" ? `دفعة للمورد${x.product ? ` · ${x.product}` : ""}` : `${x.product} × ${money(x.quantity)}`, rows: [{ label: x.ref || supplierRowLabel[x.type], value: fmtDate(x.date) }, { label: amt, value: money(bal) }] });
   }
   footer(r, org, "توقيع المورد");
   return r.page();

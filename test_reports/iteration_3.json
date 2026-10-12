@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 3 — Supplier Payments feature verified end-to-end on live Convex (fearless-ostrich-878). Backend 9/9 new tests PASS plus 16/16 regression (25/25 total). Covered GET /api/supplier-payments (owner & accountant 200, newest-first), POST /api/supplier-payments (OWNER only — agent & accountant correctly rejected with 403 'ليس لديك صلاحية'), amount<=0 rejected with 'المبلغ غير صالح', overpayment rejected with Arabic 'المبلغ أكبر من المستحق للمورد (X)', USD path (TEST org has exchange_rate so USD succeeds — code path verified; schema correctly throws 'سعر صرف الدولار' when rate==0), happy-path returns voucher_no prefixed SPY- (SPY-00001..SPY-00004 observed) and reduces owed balance exactly by amount. Frontend (390x844 mobile): owner > المخزون > supplier-statements-button opens supplier-statements-sheet; tapping supplier-row-0 (TEST_SUPPLIER_2fdf13) shows supplier-balance '1,300' and supplier-add-payment-button (visible since balance > 0). Opening supplier-payment-form, filling supplier-payment-amount-input with 999999999 and tapping supplier-payment-save-button keeps form open and shows Arabic error toast 'أكبر من المستحق'. Entering 25 + notes and saving closes the form, balance updates to '1,275' (−25 exact), 4 supplier-payment-row-* entries render (payment-row-0 slot is occupied by newest PURCHASE in timeline — payment rows are at indices 1-4, all showing voucher SPY-00001..SPY-00004). supplier-payment-cancel-button closes form cleanly. Returning to list, supplier-row-0 subtitle shows 'المستحق 1,275' reflecting the new balance; supplier-share-pdf-0 still present. Regression: 4 roles land correctly — owner /owner, acct /acct, agent /dist, dev /dev — no red screens, no Unmatched Route, no pageerrors. No deprecated expo packages found.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_supplier_payments.py",
+    "/app/backend/tests/test_backend.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "SupplierStatements.tsx line 92: testID `supplier-payment-row-${i}` uses the index into the combined timeline (purchases + returns + payments). When a purchase is the newest row, supplier-payment-row-0 does not exist — payment rows get indices 1,2,...N. Not a bug (testIDs are still unique and renderable), but tests that assume payment-row-0 should be updated to look for any `supplier-payment-row-*`. Observed indices 1-4 in TEST org.",
+    "convex/purchases.ts createSupplierPayment: `amount` is stored in base currency after toBase() while `amount_input` keeps the entered value — frontend 'المستحق' subtitle and sheet balance use base currency, so this is correct. Just worth confirming receipts/PDF show the entered currency not the base.",
+    "Supplier grouping key still uses raw string normalisation (trim + 'بدون مورد' fallback). Trailing-whitespace / casing duplication risk persists from iteration 2; low priority."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_supplier_payments.py",
+    "/app/test_reports/iteration_3.json",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "success_rate": {"backend": "100% (25/25, 9 new supplier-payment tests)", "frontend": "100% on tested flows"},
+  "seed_data_creation": "Posted 1 supplier payment of 25 SYP via UI (OWNER) and 2 extra via test runs (TEST pay x2) to TEST_SUPPLIER_2fdf13 on org_test_1. Owed balance went from 1,300 → 1,275 after the UI payment. Earlier curl & regression tests added SPY-00001 (100) and SPY-00002/00003 (50 each). TEST org data confined safely.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Preview https://error-dis-demo.preview.emergentagent.com. Convex API https://fearless-ostrich-878.eu-west-1.convex.site/api, bearer tokens in /app/memory/test_credentials.md. Web login: localStorage.setItem('session_token', JSON.stringify('test_token_<role>')) then reload. Supplier Payments testIDs confirmed on owner > المخزون: supplier-statements-button, supplier-statements-sheet, supplier-row-<n>, supplier-share-pdf-<n>, supplier-balance, supplier-add-payment-button (only when balance>0), supplier-payment-form, supplier-payment-amount-input, supplier-payment-notes-input, supplier-payment-save-button, supplier-payment-cancel-button, supplier-payment-row-<n> (n is index in full combined timeline — NOT 0-based over payments only; see critical_code_review_comments), supplier-back-button, supplier-statement-share-pdf-button. In RN web, Field testID is applied directly to the <input> element — fill with `[data-testid='supplier-payment-amount-input']` directly, not with a ' input' descendant selector. TEST org has exchange_rate set so USD supplier payments currently succeed; to test the 'سعر صرف الدولار' error path reset org exchange_rate to 0 first. TEST_SUPPLIER_2fdf13 currently has owed ~1,275 after this run; add more purchases via POST /api/purchases if more owed balance needed.",
+  "rca_of_issue": "N/A — feature verified; no bugs found."
+}

@@ -61,3 +61,4 @@ Clone the mobile app from https://github.com/abufuadeid419-glitch/apk-ios-code.g
 - Testing: iteration_2 all green (all 4 roles, all tabs). Test accounts in memory/test_credentials.md.
 ## Backlog
 - Supplier payments (سند صرف لمورد) so supplier balances reflect payments, not just purchases/returns.
+- 2026-06: Supplier payments (سند صرف لمورد): new Convex table `supplier_payments`, `GET/POST /api/supplier-payments` (owner creates, staff lists; blocks overpayment; USD→SYP at current rate). Supplier statements now subtract payments; record payment form + per-payment voucher PDF in the supplier sheet.

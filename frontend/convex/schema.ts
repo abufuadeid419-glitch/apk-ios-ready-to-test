@@ -291,6 +291,23 @@ export default defineSchema(
       .index("by_biz_id", ["id"])
       .index("by_org", ["org_id"]),
 
+    supplier_payments: defineTable({
+      id: v.string(),
+      org_id: v.string(),
+      voucher_no: v.optional(v.string()),
+      supplier: v.string(),
+      amount: v.number(), // base currency (SYP)
+      amount_input: v.optional(v.number()),
+      input_currency: v.optional(v.string()),
+      exchange_rate: v.optional(v.number()),
+      currency: v.optional(v.string()),
+      notes: v.optional(v.string()),
+      created_by_name: v.optional(v.union(v.string(), v.null())),
+      created_at: v.optional(v.string()),
+    })
+      .index("by_biz_id", ["id"])
+      .index("by_org", ["org_id"]),
+
     deliveries: defineTable({
       id: v.string(),
       org_id: v.string(),
