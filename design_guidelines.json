@@ -1,0 +1,81 @@
+{
+  "app_name": "Smart System (النظام الذكي)",
+  "personality": "1 iOS-Native Clean",
+  "personality_one_liner": "A structured, trustworthy, and modern business ERP featuring clean data hierarchies, warm terracotta accents, and rigorous RTL readability in both light and dark modes.",
+  "color": {
+    "light": {
+      "surface": "#FAFAFA", "onSurface": "#18181B",
+      "surfaceSecondary": "#FFFFFF", "onSurfaceSecondary": "#18181B",
+      "surfaceTertiary": "#F4F4F5", "onSurfaceTertiary": "#27272A",
+      "surfaceInverse": "#18181B", "onSurfaceInverse": "#FAFAFA",
+      "brand": "#A13D2D", "brandPrimary": "#A13D2D", "onBrandPrimary": "#FFFFFF",
+      "brandSecondary": "#E8BAB3", "onBrandSecondary": "#3D140E",
+      "brandTertiary": "#F5E1DE", "onBrandTertiary": "#7A2A1E",
+      "success": "#2E7D32", "onSuccess": "#FFFFFF",
+      "warning": "#ED6C02", "onWarning": "#FFFFFF",
+      "error": "#D32F2F", "onError": "#FFFFFF",
+      "info": "#455A64", "onInfo": "#FFFFFF",
+      "border": "#E4E4E7", "borderStrong": "#D4D4D8", "divider": "#E4E4E7",
+      "muted": "#71717A", "onBrand": "#FFFFFF", "overlay": "rgba(0,0,0,0.4)",
+      "pro": "#D4AF37", "onPro": "#1A1813"
+    },
+    "dark": {
+      "surface": "#121212", "onSurface": "#F5F5F5",
+      "surfaceSecondary": "#1E1E1E", "onSurfaceSecondary": "#E0E0E0",
+      "surfaceTertiary": "#2C2C2C", "onSurfaceTertiary": "#CCCCCC",
+      "surfaceInverse": "#F5F5F5", "onSurfaceInverse": "#121212",
+      "brand": "#E57373", "brandPrimary": "#E57373", "onBrandPrimary": "#1A0805",
+      "brandSecondary": "#7A2A1E", "onBrandSecondary": "#F5E1DE",
+      "brandTertiary": "#3D140E", "onBrandTertiary": "#E8BAB3",
+      "success": "#81C784", "onSuccess": "#121212",
+      "warning": "#FFB74D", "onWarning": "#121212",
+      "error": "#E57373", "onError": "#121212",
+      "info": "#90A4AE", "onInfo": "#121212",
+      "border": "#333333", "borderStrong": "#4F4F4F", "divider": "#333333",
+      "muted": "#9E9E9E", "onBrand": "#121212", "overlay": "rgba(0,0,0,0.6)",
+      "pro": "#F1D570", "onPro": "#1A1813"
+    }
+  },
+  "typography": {
+    "displayFontFamily": "Cairo-Bold",
+    "textFontFamily": "Cairo-Regular",
+    "scale": { "sm": 12, "base": 14, "lg": 16, "xl": 20, "2xl": 24 }
+  },
+  "spacing": {
+    "rule": "Rigorous padding for dense data; ensure RTL context applies flipped horizontal margins/paddings natively.",
+    "xs": 4, "sm": 8, "md": 12, "lg": 16, "xl": 24, "2xl": 32, "3xl": 48
+  },
+  "radius_tokens": { "sm": 6, "md": 12, "lg": 20, "pill": 999 },
+  "shadow_tier": "1",
+  "navigation": "bottom_tabs",
+  "icon_set": "Feather",
+  "glassmorphism": {
+    "enabled": "true",
+    "do's": ["Sticky header blur over scrolling KPIs", "Bottom tab bar"],
+    "dont's": ["Inside KPI tiles", "On form inputs"]
+  },
+  "platform_libraries": {
+    "glass": { "ios": "expo-glass-effect", "android": "expo-blur", "low_end_android_fallback": "solid surfaceSecondary" },
+    "image": "expo-image", "blur": "expo-blur", "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated", "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    { "name": "Dashboard", "purpose": "Real-time KPI overview and quick function access.", "states": { "loading": "Skeleton grids", "empty": "Welcome message + Start CTA", "error": "Fetch error + Retry" }, "layout": "Sticky glass header. 2-column grid for KPIs. Chart/List section full width below." },
+    { "name": "Pro Upgrade", "purpose": "Display premium features to incentivize upgrade.", "states": { "loading": "Spinner", "empty": "N/A", "error": "Network error" }, "layout": "Hero layout with metallic pro accents. Vertical list of benefits. Sticky CTA at the bottom." }
+  ],
+  "layout_guidance": {
+    "Header": "Sticky, glassmorphism enabled. Contains screen title (RTL aligned right), subtle avatar or menu icon on left.",
+    "Card": "surfaceSecondary, radius md, shadow tier 1. Margins lg around them. Used for customer/debts list items.",
+    "Button": "Primary: solid brandPrimary, pill radius. Secondary: brandTertiary bg, onBrandTertiary text. Ghost: transparent with brandPrimary text. Danger: solid error.",
+    "KPI Tile": "surfaceSecondary, flex 1 in 2-col row. Large metric (Cairo-Bold 2xl) and muted label (Cairo-Regular sm).",
+    "Bottom Tab Bar": "Glassmorphism, inactive icons are muted outlined, active icons are brandPrimary filled.",
+    "Pro Plan Comparison": "Hero card with metallic gold 'pro' gradient/accent. Feature list with standard checkmarks. Prominent sticky CTA at bottom."
+  },
+  "instructions_to_main_agent": [
+    "Strictly enforce RTL layout globally (right-align text, flip chevrons, support I18nManager.isRTL natively).",
+    "Use Cairo-Bold for display/headers and Cairo-Regular for text. DO NOT use other font families or simulated weights.",
+    "Implement the new dual light/dark theme strictly mapping the 'light' and 'dark' color objects.",
+    "Avoid the old moss green completely; stick to the new professional Terracotta/Gold palette.",
+    "Use the specific 'pro' and 'onPro' colors to emphasize badges and the Upgrade Pro page."
+  ]
+}

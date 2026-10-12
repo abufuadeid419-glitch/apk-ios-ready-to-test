@@ -1,0 +1,24 @@
+{
+  "summary": "Smoke-tested the Convex-backed clone. Backend: FastAPI /api/health and /api/ root return 200 with expected payloads; Convex /api/auth/me returns 401 unauthenticated (both with and without bogus bearer). Frontend (Expo web, 375x667 viewport): login screen renders in Arabic RTL (html dir=rtl, lang=ar), hero + title 'النظام الذكي' visible, phone-step rendered with default country code +963, send-code button is disabled on empty/short local phone, invalid country code (+123) shows login-cc-error validation, /legal screen loads (terms text present) and router back returns to phone-step. Zero page errors, zero console errors. No real OTP was triggered. No deprecated expo packages (expo-av/expo-barcode-scanner/expo-background-fetch) detected.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_backend.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "frontend/.env EXPO_PUBLIC_BACKEND_URL points at the Expo preview host (error-dis-demo), but src/api.ts actually hits EXPO_PUBLIC_CONVEX_SITE_URL for /api/* — the BACKEND_URL env var is effectively unused by the client. This is OK (intentional with Convex migration) but worth noting so nobody later wires the FastAPI stub by mistake.",
+    "backend/server.py is a pure stub with no DB — correct for Convex-only architecture; CORS allow_origins='*' with allow_credentials=True is technically invalid per spec but harmless here because no cookies/auth are served.",
+    "login.tsx:102 chained regex replace is dense but correct; could use a small helper for readability. Not a bug."
+  ],
+  "updated_files": ["/app/backend/tests/test_backend.py", "/app/test_reports/iteration_1.json", "/app/test_reports/pytest/pytest_results.xml"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "None — authenticated flows intentionally skipped (would trigger real SMS OTP against production Convex).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Preview URL in frontend/.env is https://error-dis-demo.preview.emergentagent.com (the task-mentioned e36c3206-… host also 200s on /api/health). Convex live site: https://fearless-ostrich-878.eu-west-1.convex.site. Login testIDs on phone step: login-screen, login-hero, phone-step, login-country-code-input, login-phone-input, login-cc-error, login-send-code-button. Code step testIDs: code-step, login-code-input, login-change-phone, login-resend-button, login-verify-button. Do NOT submit a real phone — it sends live SMS. /legal is reachable at /legal and renders Arabic terms + privacy sections.",
+  "rca_of_issue": "N/A — no bugs reproduced."
+}
