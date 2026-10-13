@@ -291,6 +291,16 @@ export default defineSchema(
       .index("by_biz_id", ["id"])
       .index("by_org", ["org_id"]),
 
+    suppliers: defineTable({
+      id: v.string(),
+      org_id: v.string(),
+      name: v.string(),
+      phone: v.optional(v.string()),
+      updated_at: v.optional(v.string()),
+    })
+      .index("by_biz_id", ["id"])
+      .index("by_org", ["org_id"]),
+
     supplier_payments: defineTable({
       id: v.string(),
       org_id: v.string(),

@@ -118,11 +118,11 @@ export async function offlineStopStatus(route: any, stop: any, status: "VISITED"
   await enqueue({ id, path: `/routes/${route.id}/stops/${stop.customer_id}/status`, body: { status }, label: `خط السير · ${stop.customer_name}` });
 }
 
-export async function offlineStockRequest(items: { product_id: string; product_name: string; quantity: number }[], note = "") {
+export async function offlineStockRequest(items: { product_id: string; product_name: string; quantity: number; unit?: "PIECE" | "PACKAGE"; unit_label?: string; pieces?: number }[], note = "") {
   const id = uid();
   const doc = { id, pending: true, items, note, status: "PENDING", created_at: new Date().toISOString() };
   await updateCached<any[]>("/stock-requests", (l) => [doc, ...l]);
-  await enqueue({ id, path: "/stock-requests", body: { id, items: items.map(({ product_id, quantity }) => ({ product_id, quantity })), note }, label: `طلب تعبئة · ${items.length} صنف` });
+  await enqueue({ id, path: "/stock-requests", body: { id, items: items.map(({ product_id, quantity, unit }) => ({ product_id, quantity, unit: unit ?? "PIECE" })), note }, label: `طلب تعبئة · ${items.length} صنف` });
   return doc;
 }
 

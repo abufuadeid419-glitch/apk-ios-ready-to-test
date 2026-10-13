@@ -43,6 +43,10 @@ export function SupplierStatementsSheet({ visible, onClose }: { visible: boolean
   const savePay = useMutate("POST", "/supplier-payments", "تم تسجيل الدفعة للمورد", () => setPay(null));
   const suppliers = useMemo(() => group(purchases.data ?? [], returns.data ?? [], payments.data ?? []), [purchases.data, returns.data, payments.data]);
   const current = suppliers.find((s) => s.name === sel) ?? null;
+  const contacts = useApi<any[]>("/suppliers", visible);
+  const contact = contacts.data?.find((c) => c.name === current?.name);
+  const [phoneEdit, setPhoneEdit] = useState<string | null>(null);
+  const saveContact = useMutate("PUT", "/suppliers", "تم حفظ رقم المورد", () => setPhoneEdit(null));
   const make = (s: SupplierStatement) => supplierStatementReceipt(s, org.data, logo.data?.data_uri ?? null);
   const shareNow = (s: SupplierStatement) => shareReceipt(make(s), `كشف حساب مورد - ${s.name}`).catch((e: any) => toast(e?.message ?? "تعذر إنشاء الملف", "error"));
   const shareVoucher = (p: any) => shareReceipt(supplierPaymentReceipt(p, org.data, logo.data?.data_uri ?? null), p.voucher_no).catch((e: any) => toast(e?.message ?? "تعذر إنشاء الملف", "error"));
@@ -65,11 +69,25 @@ export function SupplierStatementsSheet({ visible, onClose }: { visible: boolean
         <Loading />
       ) : current ? (
         <>
-          <Btn testID="supplier-back-button" small variant="ghost" icon="arrow-forward" title="كل الموردين" onPress={() => { setSel(null); setPay(null); }} />
+          <Btn testID="supplier-back-button" small variant="ghost" icon="arrow-forward" title="كل الموردين" onPress={() => { setSel(null); setPay(null); setPhoneEdit(null); }} />
           <Card style={{ gap: spacing.xs }}>
             <T v="h2">{current.name}</T>
             <T v="caption">{current.rows.length} حركة</T>
             <T v="label" color={current.balance > 0 ? "warning" : "success"} testID="supplier-balance">المستحق للمورد: {money(current.balance)}</T>
+            {phoneEdit !== null ? (
+              <View style={{ gap: spacing.sm }}>
+                <Field testID="supplier-phone-input" label="رقم هاتف المورد (واتساب / SMS)" keyboardType="phone-pad" value={phoneEdit} onChangeText={setPhoneEdit} placeholder="09xxxxxxxx" />
+                <View style={{ flexDirection: "row", gap: spacing.sm }}>
+                  <Btn testID="supplier-phone-save-button" style={{ flex: 1 }} small icon="checkmark" title="حفظ الرقم" loading={saveContact.isPending} onPress={() => saveContact.mutate({ name: current.name, phone: phoneEdit.trim() })} />
+                  <Btn testID="supplier-phone-cancel-button" small variant="ghost" title="إلغاء" onPress={() => setPhoneEdit(null)} />
+                </View>
+              </View>
+            ) : (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+                <T v="caption" style={{ flex: 1 }} testID="supplier-phone">{contact?.phone ? `الهاتف: ${contact.phone}` : "لا يوجد رقم هاتف محفوظ"}</T>
+                <Btn testID="supplier-phone-edit-button" small variant="ghost" icon="call-outline" title={contact?.phone ? "تعديل الرقم" : "إضافة رقم"} onPress={() => setPhoneEdit(contact?.phone ?? "")} />
+              </View>
+            )}
           </Card>
           {pay ? (
             <Card style={{ gap: spacing.md }} testID="supplier-payment-form">
@@ -86,7 +104,7 @@ export function SupplierStatementsSheet({ visible, onClose }: { visible: boolean
           ) : (
             current.balance > 0 && <Btn testID="supplier-add-payment-button" icon="cash-outline" title="تسجيل دفعة للمورد" onPress={() => setPay({ amount: "", currency: "SYP", notes: "" })} />
           )}
-          <DocActions idPrefix="supplier-statement" title={`كشف حساب مورد - ${current.name}`} waTitle="إرسال ملخص واتساب" make={() => make(current)} waText={() => waText(current, org.data)} />
+          <DocActions idPrefix="supplier-statement" title={`كشف حساب مورد - ${current.name}`} phone={contact?.phone} smsTitle="إرسال رسالة نصية SMS إلى المورد" make={() => make(current)} waText={() => waText(current, org.data)} />
           {current.rows.map((r, i) =>
             r.type === "SUPPLIER_PAYMENT" ? (
               <Row key={i} testID={`supplier-payment-row-${i}`} icon="cash-outline" title={`دفعة ${r.ref}${r.product ? ` · ${r.product}` : ""}`} subtitle={`${fmtDate(r.date)} · اضغط لمشاركة السند PDF`} onPress={() => shareVoucher(r.doc)} right={<T v="label" color="success">{money(r.debit)}</T>} />

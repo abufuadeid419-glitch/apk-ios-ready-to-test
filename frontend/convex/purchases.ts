@@ -5,6 +5,30 @@ import { OWNER, STAFF, checkLowStock, cleanAll, consumeFifo, docOrgUnique, logMo
 
 const supplierKey = (s?: string) => (s ?? "").trim() || "بدون مورد";
 
+// GET /api/suppliers (STAFF) — saved supplier contacts (phone for WhatsApp/SMS statements).
+export const listSuppliers = query({
+  args: { token: v.string() },
+  handler: async (ctx, { token }) => {
+    const user = await require(ctx, token, STAFF);
+    return cleanAll(await ctx.db.query("suppliers").withIndex("by_org", (q) => q.eq("org_id", user.org_id!)).collect());
+  },
+});
+
+// PUT /api/suppliers (OWNER) {name, phone} — upsert a supplier contact by name.
+export const saveSupplier = mutation({
+  args: { token: v.string(), name: v.string(), phone: v.optional(v.string()) },
+  handler: async (ctx, a) => {
+    const user = await require(ctx, a.token, OWNER);
+    const name = supplierKey(a.name);
+    const phone = (a.phone ?? "").replace(/[^\d+]/g, "").slice(0, 20);
+    const rows = await ctx.db.query("suppliers").withIndex("by_org", (q) => q.eq("org_id", user.org_id!)).collect();
+    const ex: any = rows.find((r) => r.name === name);
+    if (ex) await ctx.db.patch(ex._id, { phone, updated_at: nowIso() });
+    else await ctx.db.insert("suppliers", { id: newId(), org_id: user.org_id!, name, phone, updated_at: nowIso() });
+    return { name, phone };
+  },
+});
+
 // GET /api/supplier-payments (STAFF) — payments made to suppliers, newest first.
 export const listSupplierPayments = query({
   args: { token: v.string() },

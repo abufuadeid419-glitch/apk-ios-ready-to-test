@@ -29,6 +29,9 @@ export function OrgProfile() {
   const [uploading, setUploading] = useState(false);
   const [blocked, setBlocked] = useState(false);
   const save = useMutate("PUT", "/org/profile", "تم حفظ بيانات المؤسسة");
+  const PROFILE_KEYS = ["name", "phone", "email", "address", "tax_no", "cr_no", "invoice_footer", "phone_country_code"];
+  // Send only editable profile fields (GET also returns logo/currency fields the endpoint doesn't take).
+  const profileBody = (f: any) => Object.fromEntries(PROFILE_KEYS.map((k) => [k, String(f?.[k] ?? "")]));
 
   useEffect(() => {
     if (profile.data && !form) setForm(profile.data);
@@ -72,7 +75,7 @@ export function OrgProfile() {
       {FIELDS.map((f) => (
         <Field key={f.k} testID={`org-${f.k}-input`} label={f.label} keyboardType={f.kb} value={form[f.k]} onChangeText={(v) => setForm({ ...form, [f.k]: v })} />
       ))}
-      <Btn testID="save-org-profile-button" title="حفظ بيانات المؤسسة" icon="checkmark" loading={save.isPending} onPress={() => save.mutate(form)} />
+      <Btn testID="save-org-profile-button" title="حفظ بيانات المؤسسة" icon="checkmark" loading={save.isPending} onPress={() => save.mutate(profileBody(form))} />
     </View>
   );
 }

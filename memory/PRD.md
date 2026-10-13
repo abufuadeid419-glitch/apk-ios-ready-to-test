@@ -71,3 +71,12 @@ Clone the mobile app from https://github.com/abufuadeid419-glitch/apk-ios-code.g
   - RBAC delete: developer can't delete accounts (self or approving org deletions); owner deletes own account+org directly; employees delete own.
   - Dev license create fixed (dynamic import unsupported in Convex → static import).
 - 2026-06: FIX Android crash 'FontSize should be a positive value' on role headers (AccountButton hidden <T fontSize:0> test markers → empty Views). iteration_5 passed.
+- 2026-06 (batch 4):
+  - Price change alerts: every sale-price change from purchases/FIFO (lib.logPrice) notifies all org FIELD_AGENTs (type price_change).
+  - Stock requests by unit: distributor per-item request sheet (stock-request-sheet) with piece/package.
+  - Supplier contacts: `suppliers` table, GET/PUT /api/suppliers (owner upsert by name); phone used for supplier statement WhatsApp/SMS.
+  - Android PDF: printDoc tries sized PDF then default size, copies to "<title>.pdf" (expo-file-system) before share, falls back to print dialog if sharing unavailable.
+  - WhatsApp text option replaced by "إرسال رسالة نصية SMS إلى العميل" (expo-sms on device, sms: link fallback) in DocActions.
+  - Org profile save fix: endpoint tolerates read-only fields; frontend sends only editable keys.
+  - New pricing policy LATEST "اعتماد السعر الجديد على كل البضاعة".
+  - printDoc: File.copySync (copy() is async in expo-file-system 57) — iteration_6 bug fixed.

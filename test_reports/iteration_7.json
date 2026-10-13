@@ -1,0 +1,26 @@
+{
+  "summary": "Iteration 7 — Android PDF share race fix verified + stock-request interactive flow fully re-tested on live Convex fearless-ostrich-878. CODE REVIEW src/printDoc.ts: FIX IS CORRECT. Line 32 now calls `new File(uri).copySync(dest)` (sync), line 31 `dest.delete()` (sync) — no dropped Promises, no other async misuse. makePdf fallback (default page size on media-size reject) and Sharing.isAvailableAsync→Print.printAsync fallback preserved. printDoc.web.ts untouched (web shim). STOCK REQUEST INTERACTIVE FLOW: created a static assertion test (test_printdoc_uses_copySync) + 6 live Convex API tests + a full UI run (mobile 390x844) as test_token_agent. Flow verified: tap request-stock-504c618ff474444793b7f4ac7ba26bc1 → stock-request-sheet opens with title 'طلب تعبئة · TEST_PROD_06c08830' → stock-request-unit toggled to 'كرتونة (10)' (PACKAGE) → stock-request-qty-input accepts '2' and stock-request-pieces-hint renders '= 20 قطعة' → send-stock-request-button fires POST /api/stock-requests and shows toast 'تم إرسال طلب التعبئة للمالك' → agent list immediately shows 'TEST_PROD_06c08830 ×2 كرتونة · قيد الانتظار'. Owner side: switched to test_token_owner, الإدارة tab → segment-deliveries renders 'طلبات تعبئة من الموزعين' section with the exact new request (TEST_PROD_06c08830 × 2 كرتونة, 2026/10/13 21:29), fulfill-request-<id> and reject-request-<id> buttons present; reject-request click worked and cleared pending state. QUICK REGRESSION: distributor /dist home loads with stat tiles, 'شحنات بانتظار التأكيد' list, 'مخزوني الحالي' with my-stock-* rows, notification bell with unread badge; owner home + الإدارة tabs (الموظفون, التسليم والمرتجعات) render cleanly, no 500s, no red screens, no console errors (two 502s observed during الإدارة tab load were transient Cloudflare preview errors — retry succeeded). Backend: 6/6 live tests passed, 1 conditionally skipped (test_owner_rejects_pending_for_target_product skipped on 2nd run because nothing pending — expected after cleanup). Convex createRequest validator correctly ignores extra client fields: offlineActions.ts already strips to {product_id, quantity, unit} before enqueuing — server derives product_name/pieces/unit_label via unitQty(prod, …). NO BUGS FOUND in this iteration — iteration_6 regression gate is closed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_iteration_7.py", "/app/test_reports/pytest/iter7.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "src/printDoc.ts: namedCopy() now correctly uses File#copySync(dest) and File#delete() (both sync in expo-file-system 57). The Android share-sheet race on dropped Promise is resolved.",
+    "src/printDoc.ts: makePdf() retains the Android WebView fallback (retry without custom size). shareReceipt still falls back to Print.printAsync when Sharing.isAvailableAsync() is false. No other async misuse.",
+    "src/components/StockRequests.tsx: AgentStock pendingIds suppression (line 29/74) + Sheet (stock-request-sheet) with UnitToggle, Field (decimal-pad), stock-request-pieces-hint, and send-stock-request-button are all wired correctly and produce the expected API payload after offlineActions.ts strips extras.",
+    "convex/deliveries.ts createRequest validator intentionally accepts only {product_id, quantity, unit}; product_name / pieces / unit_label are derived server-side via unitQty(prod, unit, qty). Any future client code sending those extras will 400 (ArgumentValidationError) — matches current defensive behavior.",
+    "convex/http.ts stock-requests routes (GET, POST, POST /:id/fulfill, POST /:id/reject) all respond 200 on both owner and agent tokens and persist across the UI/API round-trip."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration_7.py"],
+  "success_rate": {"backend": "100% (6/6 passed, 1 skip-when-clean)", "frontend": "100% — full stock-request UI flow + owner management screens exercised end-to-end without errors"},
+  "seed_data_creation": "None. Used existing TEST org, test_token_owner/test_token_agent, TEST_PROD_06c08830 (id 504c618ff474444793b7f4ac7ba26bc1). Live POST created one PACKAGE request and the test fulfilled/rejected it to restore clean state.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "iteration_6 Android PDF race fix confirmed. The copySync() fix is correct for expo-file-system 57; cannot interactively exercise expo-sharing on the web preview (printDoc.web.ts shim), so any further verification must come from an EAS build / native run. Stock-request flow is now fully covered by test_iteration_7.py — reuse as regression. If next iteration touches createRequest, remember the Convex validator only accepts {product_id, quantity, unit}.",
+  "rca_of_issue": "N/A — fix verified. Prior RCA (iteration_6): File#copy() is async in expo-file-system 57 and was being called without await inside a synchronous helper, so Sharing.shareAsync received a path to an unfinished file on Android. The one-char change to copySync() restores the sync semantics expected by the surrounding helper and eliminates the race."
+}

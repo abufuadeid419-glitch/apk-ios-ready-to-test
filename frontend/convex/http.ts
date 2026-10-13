@@ -58,6 +58,8 @@ const ROUTES: Route[] = [
   ["GET", "/purchase-returns", "q", api.purchases.listReturns, T],
   ["POST", "/purchase-returns", "m", api.purchases.createReturn, spread],
   ["GET", "/supplier-payments", "q", api.purchases.listSupplierPayments, T],
+  ["GET", "/suppliers", "q", api.purchases.listSuppliers, T],
+  ["PUT", "/suppliers", "m", api.purchases.saveSupplier, spread],
   ["POST", "/supplier-payments", "m", api.purchases.createSupplierPayment, spread],
   // deliveries + inventory + stock-requests
   ["GET", "/deliveries", "q", api.deliveries.list, T],

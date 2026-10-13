@@ -7,11 +7,12 @@ import { queryClient } from "@/src/query-client";
 import { radius, spacing, useTheme } from "@/src/theme";
 import { Btn, Ionicons, Sheet, T, useToast } from "@/src/ui";
 
-export type PricingMethod = "FIFO" | "WAVG";
+export type PricingMethod = "FIFO" | "WAVG" | "LATEST";
 
 const OPTIONS: { key: PricingMethod; title: string; desc: string; icon: any }[] = [
   { key: "FIFO", title: "الوارد أولاً صادر أولاً (FIFO)", desc: "تُباع البضاعة القديمة بسعرها القديم أولاً، وعند نفادها ينتقل سعر البيع تلقائياً لسعر الدفعة الجديدة.", icon: "layers-outline" },
   { key: "WAVG", title: "المتوسط المرجّح", desc: "تُحسب تكلفة موحدة من الكمية القديمة والجديدة، ويُعدَّل سعر البيع بنفس نسبة الربح ويُعتمد سعراً موحداً.", icon: "git-merge-outline" },
+  { key: "LATEST", title: "اعتماد السعر الجديد على كل البضاعة", desc: "تُعتمد تكلفة البضاعة الجديدة وسعرها (بنفس نسبة الربح) على كل الكمية المتوفرة من نفس المادة فوراً.", icon: "trending-up-outline" },
 ];
 
 // Owner's rule for sale prices when a purchase arrives at a different cost.

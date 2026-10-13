@@ -1,4 +1,5 @@
 import * as Clipboard from "expo-clipboard";
+import * as SMS from "expo-sms";
 import { useEffect, useState } from "react";
 import { Linking, Platform, View } from "react-native";
 
@@ -24,6 +25,16 @@ export const normPhone = (p?: string, cc?: string) => {
 
 export function openWhatsApp(phone: string | undefined, text: string, cc?: string) {
   return Linking.openURL(`https://wa.me/${normPhone(phone, cc)}?text=${encodeURIComponent(text)}`);
+}
+
+// SMS composed on the user's own phone (sent from the distributor's number to the customer).
+export async function openSms(phone: string | undefined, text: string, cc?: string) {
+  const to = phone ? `+${normPhone(phone, cc)}` : "";
+  if (Platform.OS !== "web" && (await SMS.isAvailableAsync())) {
+    await SMS.sendSMSAsync(to ? [to] : [], text);
+    return;
+  }
+  await Linking.openURL(`sms:${to}${Platform.OS === "ios" ? "&" : "?"}body=${encodeURIComponent(text)}`);
 }
 
 function BluetoothPrint({ make }: { make: () => ReceiptDoc }) {
@@ -67,7 +78,7 @@ function BluetoothPrint({ make }: { make: () => ReceiptDoc }) {
 }
 
 // PDF / print (80mm thermal) / Bluetooth / WhatsApp buttons shared by invoices, vouchers and statements.
-export function DocActions({ make, title, phone, waText, waTitle, idPrefix }: { make: () => ReceiptDoc; title: string; phone?: string; waText: () => string; waTitle: string; idPrefix: string }) {
+export function DocActions({ make, title, phone, waText, idPrefix, smsTitle }: { make: () => ReceiptDoc; title: string; phone?: string; waText: () => string; waTitle?: string; idPrefix: string; smsTitle?: string }) {
   const toast = useToast();
   const org = useApi<any>("/org/profile");
   const share = async () => {
@@ -105,7 +116,7 @@ export function DocActions({ make, title, phone, waText, waTitle, idPrefix }: { 
         <Btn testID={`${idPrefix}-share-pdf-button`} style={{ flex: 1 }} small variant={btAvailable ? "secondary" : "primary"} title={Platform.OS === "web" ? "PDF / حفظ" : "PDF / مشاركة"} icon="document-text-outline" onPress={share} />
         <Btn testID={`${idPrefix}-print-button`} style={{ flex: 1 }} small variant="secondary" title="طباعة" icon="print-outline" onPress={print} />
       </View>
-      <Btn testID={`${idPrefix}-whatsapp-button`} small variant="ghost" icon="chatbubble-outline" title={phone ? `${waTitle} (نص) إلى ${phone}` : `${waTitle} (نص)`} onPress={() => openWhatsApp(phone, waText(), org.data?.phone_country_code).catch(() => toast("تعذر فتح واتساب", "error"))} />
+      <Btn testID={`${idPrefix}-sms-button`} small variant="ghost" icon="chatbox-ellipses-outline" title={smsTitle ?? "إرسال رسالة نصية SMS إلى العميل"} onPress={() => openSms(phone, waText(), org.data?.phone_country_code).catch(() => toast("تعذر فتح الرسائل النصية", "error"))} />
       <T v="caption" style={{ textAlign: "center" }} testID={`${idPrefix}-paper-size`}>
         مقاس الطباعة: ورق حراري 80 مم
         {btPlatform && !btAvailable ? " · الطباعة المباشرة عبر البلوتوث متاحة في التطبيق المثبت" : ""}

@@ -1,12 +1,12 @@
 import { useState } from "react";
-import { qtyLabel } from "@/src/components/UnitToggle";
+import { qtyLabel, piecesOf, pppOf, Unit, UnitToggle, unitName } from "@/src/components/UnitToggle";
 import { View } from "react-native";
 
 import { fmtDate, money } from "@/src/api";
 import { useApi, useMutate } from "@/src/hooks";
 import { offlineStockRequest } from "@/src/offlineActions";
 import { spacing } from "@/src/theme";
-import { Badge, Btn, Card, Empty, IconBtn, Row, Section, T, useToast } from "@/src/ui";
+import { Badge, Btn, Card, Empty, Field, IconBtn, Row, Section, Sheet, T, useToast } from "@/src/ui";
 
 const LOW_MIN = 5;
 const isLow = (i: any) => i.quantity <= Math.max(i.min_stock ?? 0, LOW_MIN);
@@ -37,6 +37,19 @@ export function AgentStock() {
       setSending(false);
     }
   };
+  // Single-item request with piece / package choice.
+  const [one, setOne] = useState<{ item: any; qty: string; unit: Unit } | null>(null);
+  const sendOne = async () => {
+    if (!one || !(+one.qty > 0)) return toast("أدخل الكمية", "error");
+    setSending(true);
+    try {
+      await offlineStockRequest([{ product_id: one.item.product_id, product_name: one.item.product_name, quantity: +one.qty, unit: one.unit, unit_label: unitName(one.item, one.unit), pieces: piecesOf(one.item, one.unit, +one.qty) }]);
+      toast("تم إرسال طلب التعبئة للمالك");
+      setOne(null);
+    } finally {
+      setSending(false);
+    }
+  };
 
   return (
     <>
@@ -58,7 +71,7 @@ export function AgentStock() {
                 right={
                   <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
                     <Badge text={money(i.quantity)} tone={isLow(i) ? "warning" : "brand"} />
-                    {!pendingIds.has(i.product_id) && <IconBtn testID={`request-stock-${i.product_id}`} icon="add-circle-outline" onPress={() => request([i])} />}
+                    {!pendingIds.has(i.product_id) && <IconBtn testID={`request-stock-${i.product_id}`} icon="add-circle-outline" onPress={() => setOne({ item: i, qty: String(suggestQty(i)), unit: "PIECE" })} />}
                   </View>
                 }
               />
@@ -75,6 +88,15 @@ export function AgentStock() {
           </Card>
         </Section>
       )}
+      <Sheet testID="stock-request-sheet" visible={!!one} onClose={() => setOne(null)} title={`طلب تعبئة · ${one?.item.product_name ?? ""}`} footer={<Btn testID="send-stock-request-button" title="إرسال الطلب" icon="send-outline" loading={sending} onPress={sendOne} />}>
+        {one && (
+          <>
+            <UnitToggle testID="stock-request-unit" product={one.item} value={one.unit} onChange={(u) => setOne({ ...one, unit: u, qty: u === one.unit ? one.qty : String(u === "PACKAGE" ? Math.max(1, Math.ceil(+one.qty / pppOf(one.item))) : +one.qty * pppOf(one.item)) })} />
+            <Field testID="stock-request-qty-input" label={`الكمية (${unitName(one.item, one.unit)})`} keyboardType="decimal-pad" value={one.qty} onChangeText={(v) => setOne({ ...one, qty: v })} />
+            {one.unit === "PACKAGE" && +one.qty > 0 && <T v="caption" testID="stock-request-pieces-hint">= {money(piecesOf(one.item, "PACKAGE", +one.qty))} {unitName(one.item, "PIECE")}</T>}
+          </>
+        )}
+      </Sheet>
     </>
   );
 }

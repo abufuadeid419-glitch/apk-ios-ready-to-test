@@ -70,12 +70,12 @@ export const deleteAccount = mutation({
   },
 });
 
-// PUT /api/org/pricing-method (OWNER) — how sale prices follow purchase-cost changes: FIFO | WAVG.
+// PUT /api/org/pricing-method (OWNER) — how sale prices follow purchase-cost changes: FIFO | WAVG | LATEST.
 export const orgPricingMethod = mutation({
   args: { token: v.string(), method: v.string() },
   handler: async (ctx, a) => {
     const user = await require(ctx, a.token, OWNER);
-    if (a.method !== "FIFO" && a.method !== "WAVG") throw new Error("طريقة التسعير غير صالحة");
+    if (!["FIFO", "WAVG", "LATEST"].includes(a.method)) throw new Error("طريقة التسعير غير صالحة");
     const org: any = await orgById(ctx, user.org_id!);
     await ctx.db.patch(org._id, { pricing_method: a.method });
     return { pricing_method: a.method };
@@ -248,7 +248,9 @@ export const orgProfile = query({
 });
 
 export const orgProfileUpdate = mutation({
-  args: { token: v.string(), name: v.string(), phone: v.optional(v.string()), email: v.optional(v.string()), address: v.optional(v.string()), tax_no: v.optional(v.string()), cr_no: v.optional(v.string()), invoice_footer: v.optional(v.string()), phone_country_code: v.optional(v.string()) },
+  args: { token: v.string(), name: v.string(), phone: v.optional(v.string()), email: v.optional(v.string()), address: v.optional(v.string()), tax_no: v.optional(v.string()), cr_no: v.optional(v.string()), invoice_footer: v.optional(v.string()), phone_country_code: v.optional(v.string()),
+    // Read-only fields returned by GET /org/profile — accepted and ignored so saving the whole form never fails.
+    has_logo: v.optional(v.any()), currency: v.optional(v.any()), alt_currency: v.optional(v.any()), exchange_rate: v.optional(v.any()), pricing_method: v.optional(v.any()) },
   handler: async (ctx, a) => {
     const user = await require(ctx, a.token, OWNER);
     if (!a.name.trim()) throw new Error("اسم المؤسسة مطلوب");
@@ -656,7 +658,7 @@ export const devVersionDelete = mutation({
   handler: async (ctx, { token, id }) => { await require(ctx, token, DEV); const v2 = (await ctx.db.query("app_versions").collect()).find((x) => x.id === id); if (v2) await ctx.db.delete(v2._id); return { ok: true }; },
 });
 
-const ORG_COLLECTIONS = ["products", "customers", "customer_types", "sales", "collections", "sales_returns", "purchases", "purchase_returns", "deliveries", "distributor_inventory", "stock_movements", "routes", "stock_requests", "invitations", "counters", "agent_locations", "price_history", "upgrade_requests", "payment_vouchers", "warehouse_returns", "supplier_payments"];
+const ORG_COLLECTIONS = ["products", "customers", "customer_types", "sales", "collections", "sales_returns", "purchases", "purchase_returns", "deliveries", "distributor_inventory", "stock_movements", "routes", "stock_requests", "invitations", "counters", "agent_locations", "price_history", "upgrade_requests", "payment_vouchers", "warehouse_returns", "supplier_payments", "suppliers"];
 
 export const devDeletionReview = mutation({
   args: { token: v.string(), id: v.string(), action: v.string(), note: v.optional(v.string()) },

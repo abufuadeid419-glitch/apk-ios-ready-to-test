@@ -252,7 +252,7 @@ export default function Products() {
             {buyProd && buy.unit === "PACKAGE" && +buy.quantity > 0 && <T v="caption" testID="purchase-pieces-hint">= {money(piecesOf(buyProd, "PACKAGE", +buy.quantity))} {unitName(buyProd, "PIECE")} تُضاف للمستودع</T>}
             {buyProd && +buy.unit_cost > 0 && Math.abs((+buy.unit_cost / (buy.unit === "PACKAGE" ? pppOf(buyProd) : 1)) - (buyProd.cost_price ?? 0)) > 0.001 && (
               <T v="caption" color="warning" testID="purchase-cost-change-hint">
-                التكلفة تختلف عن الحالية ({money(buyProd.cost_price)}) · سياسة التسعير: {user?.org?.pricing_method === "FIFO" ? "الوارد أولاً صادر أولاً" : user?.org?.pricing_method === "WAVG" ? "المتوسط المرجّح" : "سيُطلب منك اختيارها"}
+                التكلفة تختلف عن الحالية ({money(buyProd.cost_price)}) · سياسة التسعير: {user?.org?.pricing_method === "FIFO" ? "الوارد أولاً صادر أولاً" : user?.org?.pricing_method === "WAVG" ? "المتوسط المرجّح" : user?.org?.pricing_method === "LATEST" ? "اعتماد السعر الجديد على كل البضاعة" : "سيُطلب منك اختيارها"}
               </T>
             )}
             <Field testID="purchase-supplier-input" label="المورد" value={buy.supplier} onChangeText={(v) => setBuy({ ...buy, supplier: v })} />

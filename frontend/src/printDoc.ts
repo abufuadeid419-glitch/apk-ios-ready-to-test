@@ -1,5 +1,7 @@
+import { File, Paths } from "expo-file-system";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
+import { Platform } from "react-native";
 
 import { RECEIPT_MM, ReceiptDoc } from "@/src/receipts";
 
@@ -11,7 +13,36 @@ export async function printReceipt(d: ReceiptDoc) {
   await Print.printAsync({ html: d.html, ...size(d) });
 }
 
+async function makePdf(d: ReceiptDoc) {
+  try {
+    return (await Print.printToFileAsync({ html: d.html, ...size(d), ...(Platform.OS === "ios" ? { margins: { left: 0, right: 0, top: 0, bottom: 0 } } : {}) })).uri;
+  } catch {
+    // Some Android WebViews reject custom media sizes — fall back to the default page size.
+    return (await Print.printToFileAsync({ html: d.html })).uri;
+  }
+}
+
+// Android share targets (WhatsApp, Drive…) need a real .pdf file name; Print's random cache name is
+// copied to "<title>.pdf" in the cache dir that expo-sharing's FileProvider exposes.
+function namedCopy(uri: string, title: string) {
+  try {
+    const name = `${title.replace(/[\\/:*?"<>|#%]+/g, "-").trim().slice(0, 60) || "document"}.pdf`;
+    const dest = new File(Paths.cache, name);
+    if (dest.exists) dest.delete();
+    new File(uri).copySync(dest);
+    return dest.uri;
+  } catch {
+    return uri;
+  }
+}
+
 export async function shareReceipt(d: ReceiptDoc, title: string) {
-  const { uri } = await Print.printToFileAsync({ html: d.html, ...size(d), margins: { left: 0, right: 0, top: 0, bottom: 0 } });
+  let uri = await makePdf(d);
+  if (Platform.OS === "android") uri = namedCopy(uri, title);
+  if (!(await Sharing.isAvailableAsync())) {
+    // No share sheet: open the system print dialog, which offers "Save as PDF".
+    await Print.printAsync({ uri });
+    return;
+  }
   await Sharing.shareAsync(uri, { mimeType: "application/pdf", UTI: "com.adobe.pdf", dialogTitle: title });
 }

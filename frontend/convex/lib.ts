@@ -234,13 +234,18 @@ async function onHand(ctx: MutationCtx, prod: any) {
 async function logPrice(ctx: MutationCtx, prod: any, oldPrice: number, newPrice: number, by: string | null) {
   if (Math.abs(oldPrice - newPrice) < 0.0001) return;
   await ctx.db.insert("price_history", { org_id: prod.org_id, product_id: prod.id, product_name: prod.name, old_price: oldPrice, new_price: newPrice, by, at: nowIso() });
+  // Price change alert to every distributor of the organization.
+  const agents = (await ctx.db.query("users").withIndex("by_org", (q: any) => q.eq("org_id", prod.org_id)).collect()).filter((u: any) => u.employee_type === "FIELD_AGENT");
+  const cur = prod.price_currency === "USD" ? "$" : "";
+  const dir = newPrice > oldPrice ? "ارتفع" : "انخفض";
+  await notify(ctx, agents.map((u: any) => u.user_id), "price_change", `تغيّر سعر ${prod.name}`, `${dir} سعر البيع من ${round2(oldPrice)}${cur} إلى ${round2(newPrice)}${cur} للقطعة`);
 }
 
 // Returns the product patch for a purchase of `pieces` at `pieceCost` (both in the product's currency).
 // Throws PRICING_METHOD_REQUIRED when the cost changes, old goods are on hand and the owner hasn't chosen a policy.
 export async function purchaseCostPatch(ctx: MutationCtx, user: any, prod: any, pieces: number, pieceCost: number) {
   const org: any = await orgById(ctx, prod.org_id);
-  const method = org?.pricing_method as "FIFO" | "WAVG" | undefined;
+  const method = org?.pricing_method as "FIFO" | "WAVG" | "LATEST" | undefined;
   const oldCost = prod.cost_price ?? 0;
   const oldPrice = prod.sale_price ?? 0;
   const ppp = Math.max(1, Math.round(prod.pieces_per_package ?? 1));
@@ -250,7 +255,10 @@ export async function purchaseCostPatch(ctx: MutationCtx, user: any, prod: any, 
   // Keep the same markup for the new goods.
   const scaled = method && changed && oldCost > 0 ? round2((oldPrice * pieceCost) / oldCost) : oldPrice;
   const patch: any = { cost_price: round2(pieceCost) };
-  if (method === "WAVG" && held > 0) {
+  if (method === "LATEST") {
+    // New cost and its price apply to ALL goods on hand of this product.
+    Object.assign(patch, { cost_price: round2(pieceCost), sale_price: scaled, package_price: round2(scaled * ppp), cost_layers: [] });
+  } else if (method === "WAVG" && held > 0) {
     const avg = round2((held * oldCost + pieces * pieceCost) / (held + pieces));
     const price = oldCost > 0 ? round2((oldPrice * avg) / oldCost) : oldPrice;
     Object.assign(patch, { cost_price: avg, sale_price: price, package_price: round2(price * ppp), cost_layers: [] });
