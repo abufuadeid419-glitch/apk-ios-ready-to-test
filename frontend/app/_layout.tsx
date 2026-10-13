@@ -44,6 +44,7 @@ function Gate() {
     // Shared stack screens reachable from inside the app.
     const allowed =
       (seg === "reports" && ["owner", "acct"].includes(target)) ||
+      (seg === "journal" && ["owner", "acct"].includes(target)) ||
       (seg === "upgrade" && user?.role === "OWNER") ||
       seg === "legal" ||
       seg === "goodbye" ||

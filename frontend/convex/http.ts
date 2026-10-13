@@ -1,7 +1,7 @@
 import { httpRouter } from "convex/server";
 
 import { httpAction } from "./_generated/server";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 
 type Kind = "q" | "m" | "a";
 type Build = (c: { p: Record<string, string>; q: URLSearchParams; b: any; token: string }) => any;
@@ -138,6 +138,7 @@ const ROUTES: Route[] = [
   ["GET", "/app-version/latest", "q", api.extra.appVersionLatest, (c) => ({ platform: c.q.get("platform") ?? undefined })],
   // backup
   ["GET", "/backup/export", "q", api.extra.backupExport, T],
+  ["GET", "/accounting/journal", "q", api.journal.journal, (c) => ({ token: c.token, from: c.q.get("from") || undefined, to: c.q.get("to") || undefined })],
   // developer console
   ["GET", "/dev/stats", "q", api.extra.devStats, T],
   ["GET", "/dev/licenses", "q", api.extra.devLicensesList, T],
@@ -196,6 +197,12 @@ const handler = httpAction(async (ctx, request) => {
   let body: any = {};
   if (["POST", "PUT", "PATCH"].includes(request.method)) {
     try { body = await request.json(); } catch { body = {}; }
+  }
+
+  // RBAC: accountants are strictly read-only (only their own session/profile/notification actions are allowed).
+  if (request.method !== "GET" && token && !/^\/(auth|notifications)(\/|$)/.test(path)) {
+    const who: any = await ctx.runQuery(internal.journal.roleOf, { token });
+    if (who?.employee_type === "ACCOUNTANT") return json(403, { detail: "حساب المحاسب للقراءة فقط — لا يملك صلاحية التعديل أو الإضافة أو الإلغاء" });
   }
 
   for (const r of compiled) {

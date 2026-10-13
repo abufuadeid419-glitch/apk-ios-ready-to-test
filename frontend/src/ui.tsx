@@ -680,7 +680,7 @@ export function Select<O>({
         <T style={{ flex: 1 }} color={value ? "onSurface" : "muted"} numberOfLines={1}>{value ?? placeholder}</T>
         <Ionicons name="chevron-down" size={18} color={colors.muted} />
       </Pressable>
-      <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)} statusBarTranslucent>
+      <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)} statusBarTranslucent navigationBarTranslucent>
         <View style={{ flex: 1, backgroundColor: colors.overlay }}>
           <Pressable style={{ flex: 1 }} onPress={() => setOpen(false)} />
           <View style={{ height: "75%", backgroundColor: colors.surface, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, paddingBottom: insets.bottom }}>

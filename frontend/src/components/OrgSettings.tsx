@@ -1,10 +1,10 @@
-import * as FileSystem from "expo-file-system/legacy";
-import * as Sharing from "expo-sharing";
 import { useState } from "react";
 import { Platform, Switch, View } from "react-native";
 import { useRouter } from "expo-router";
 
 import { PricingMethodPicker } from "@/src/components/PricingMethod";
+import { backupHtml } from "@/src/backupPdf";
+import { shareHtmlPdf } from "@/src/printDoc";
 import { api, fmtDate } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { useApi, useMutate } from "@/src/hooks";
@@ -111,19 +111,9 @@ export function OrgSettings() {
   const exportBackup = async () => {
     setExporting(true);
     try {
+      // PDF only, with readable business data (no ids / codes / database structure).
       const data = await api("/backup/export");
-      const json = JSON.stringify(data, null, 2);
-      const name = `backup-${new Date().toISOString().slice(0, 10)}.json`;
-      if (Platform.OS === "web") {
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(new Blob([json], { type: "application/json" }));
-        a.download = name;
-        a.click();
-      } else {
-        const uri = FileSystem.cacheDirectory + name;
-        await FileSystem.writeAsStringAsync(uri, json);
-        await Sharing.shareAsync(uri, { mimeType: "application/json", dialogTitle: name });
-      }
+      await shareHtmlPdf(backupHtml(data), `نسخة احتياطية - ${data?.organization?.name ?? ""} - ${new Date().toISOString().slice(0, 10)}`);
       toast("تم تصدير النسخة الاحتياطية");
     } catch (e: any) {
       toast(e.message, "error");
@@ -156,7 +146,7 @@ export function OrgSettings() {
 
       <Section title="النسخ الاحتياطي">
         <T v="caption">صدّر جميع بيانات المؤسسة (المنتجات، العملاء، الفواتير، التحصيلات، المشتريات...) كملف JSON.</T>
-        <Btn testID="export-backup-button" variant="secondary" icon="cloud-download-outline" title="تصدير نسخة احتياطية" loading={exporting} onPress={exportBackup} />
+        <Btn testID="export-backup-button" variant="secondary" icon="cloud-download-outline" title="تصدير نسخة احتياطية (PDF)" loading={exporting} onPress={exportBackup} />
       </Section>
 
       <Section title="حذف المؤسسة والحساب">

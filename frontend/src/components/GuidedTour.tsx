@@ -39,7 +39,7 @@ export function GuidedTour({ tourKey, tabs }: { tourKey: string; tabs: { icon: I
   const last = step === steps.length - 1;
 
   return (
-    <Modal visible={step >= 0} transparent animationType="fade" onRequestClose={finish} statusBarTranslucent>
+    <Modal visible={step >= 0} transparent animationType="fade" onRequestClose={finish} statusBarTranslucent navigationBarTranslucent>
       <View style={{ flex: 1, backgroundColor: colors.overlay, justifyContent: "center", padding: spacing.xl }}>
         {s && (
           <View testID="guided-tour" style={{ backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.xl, gap: spacing.lg, alignItems: "center" }}>

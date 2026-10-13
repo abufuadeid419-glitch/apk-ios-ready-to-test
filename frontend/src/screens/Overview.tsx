@@ -84,6 +84,10 @@ export default function Overview() {
                 {!isAgent && (
                   <Btn testID="open-reports-button" variant="secondary" icon="bar-chart-outline" title="التقارير اليومية والأسبوعية والشهرية" onPress={() => router.push("/reports")} />
                 )}
+                {!isAgent && (
+                  <Btn testID="open-journal-button" variant="secondary" icon="document-text-outline" title="دفتر اليومية التفصيلي (لبرنامج المحاسبة)" onPress={() => router.push("/journal" as any)} />
+                )}
+                {user?.employee_type === "ACCOUNTANT" && <T v="caption" testID="acct-readonly-note">حساب المحاسب للعرض فقط — لا يمكن الإضافة أو التعديل أو الإلغاء.</T>}
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.md }}>
                   <Stat testID="stat-today-sales" label="مبيعات اليوم" value={money(s.today_sales)} icon="today-outline" tone="accent" />
                   <Stat testID="stat-total-sales" label={isAgent ? "إجمالي مبيعاتي" : "إجمالي المبيعات"} value={money(s.sales_total)} icon="trending-up-outline" tone="success" />

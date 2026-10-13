@@ -94,7 +94,7 @@ export default function Activate() {
           <Btn testID="import-qr-button" variant="ghost" icon="image-outline" title="استيراد رمز QR من المعرض" loading={importing} onPress={importQr} />
         </Card>
         {!trialFirst && trialCard}
-      <Modal visible={scan} animationType="slide" onRequestClose={() => setScan(false)}>
+      <Modal visible={scan} animationType="slide" onRequestClose={() => setScan(false)} statusBarTranslucent navigationBarTranslucent>
         <QrScan
           onClose={() => setScan(false)}
           onCode={(c) => { setScan(false); const v = c.trim().toUpperCase(); setCode(v); run("code", v); }}

@@ -103,12 +103,53 @@ export const uid = () => Date.now().toString(36) + Math.random().toString(36).sl
 export const pendingCount = () => queue.length;
 
 // ---------------- Cache ----------------
+// Organization identity (profile + logo/stamp) is cached ENCRYPTED: the cipher key lives in the
+// device Keychain / Keystore (storage.secure*), the ciphertext in regular storage. Invoices can
+// therefore always be branded, online or offline.
+const SECURE_PATHS = new Set(["/org/profile", "/org/logo"]);
+let cipherKey: Promise<number[]> | null = null;
+function getKey() {
+  if (!cipherKey)
+    cipherKey = (async () => {
+      let k = await storage.secureGet<string>("org_cache_key", "");
+      if (!k) {
+        k = Array.from({ length: 32 }, () => Math.floor(Math.random() * 256).toString(16).padStart(2, "0")).join("");
+        await storage.secureSet("org_cache_key", k);
+      }
+      return k.match(/../g)!.map((h) => parseInt(h, 16));
+    })();
+  return cipherKey;
+}
+// xorshift128 keystream seeded from the 256-bit device key; text is UTF-16 code units.
+function xcrypt(text: string, key: number[]) {
+  let [a, b, c, d] = [0, 1, 2, 3].map((i) => ((key[i * 4] << 24) | (key[i * 4 + 1] << 16) | (key[i * 4 + 2] << 8) | key[i * 4 + 3]) >>> 0 || 0x9e3779b9);
+  let out = "";
+  for (let i = 0; i < text.length; i++) {
+    let t = a ^ (a << 11);
+    a = b; b = c; c = d;
+    d = (d ^ (d >>> 19) ^ (t ^ (t >>> 8))) >>> 0;
+    out += String.fromCharCode(text.charCodeAt(i) ^ (d & 0xffff));
+  }
+  return out;
+}
+const toB64 = (s: string) => { const b: string[] = []; for (let i = 0; i < s.length; i++) b.push(String.fromCharCode(s.charCodeAt(i) >> 8, s.charCodeAt(i) & 255)); return btoa(b.join("")); };
+const fromB64 = (s: string) => { const r = atob(s); let o = ""; for (let i = 0; i + 1 < r.length; i += 2) o += String.fromCharCode((r.charCodeAt(i) << 8) | r.charCodeAt(i + 1)); return o; };
+
 export async function readCache<T = any>(path: string): Promise<T | null> {
-  return parse(await storage.getItem(`cache:${path}`, null), null);
+  const raw: any = await storage.getItem(`cache:${path}`, null);
+  if (SECURE_PATHS.has(path) && typeof raw === "string" && raw.startsWith("enc:")) {
+    try {
+      return JSON.parse(xcrypt(fromB64(raw.slice(4)), await getKey()));
+    } catch {
+      return null;
+    }
+  }
+  return parse(raw, null);
 }
 
 export async function writeCache(path: string, data: unknown) {
-  await storage.setItem(`cache:${path}`, JSON.stringify(data));
+  const json = JSON.stringify(data);
+  await storage.setItem(`cache:${path}`, SECURE_PATHS.has(path) ? `enc:${toB64(xcrypt(json, await getKey()))}` : json);
   const idx: string[] = parse(await storage.getItem(IDX_KEY, null), []);
   if (!idx.includes(path)) await storage.setItem(IDX_KEY, JSON.stringify([...idx, path]));
 }
@@ -247,9 +288,12 @@ export async function syncQueue() {
       rounds++;
       const inFlightPaths = new Set<string>();
       const batch: QItem[] = [];
-      for (const it of queue) {
+      // Dependency order: offline-created customers must reach the server before any sale /
+      // collection / return that references them, so while customers are queued only they flush.
+      const ready = queue.filter(dueNow);
+      const pool = ready.some((q) => q.path === "/customers") ? ready.filter((q) => q.path === "/customers") : ready;
+      for (const it of pool) {
         if (batch.length >= PARALLEL) break;
-        if (!dueNow(it)) continue;
         if (inFlightPaths.has(it.path)) continue; // keep per-path order
         batch.push(it);
         inFlightPaths.add(it.path);

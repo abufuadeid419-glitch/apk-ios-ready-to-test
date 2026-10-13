@@ -35,6 +35,9 @@ export default function Products() {
   const [suppliers, setSuppliers] = useState(false);
   const products = useApi<any[]>("/products");
   const purchases = useApi<any[]>("/purchases");
+  const suppliersQ = useApi<any[]>("/suppliers");
+  // Saved supplier contacts + every supplier name used in previous purchases.
+  const supplierNames = [...new Set([...(suppliersQ.data ?? []).map((x) => x.name), ...(purchases.data ?? []).map((p) => (p.supplier ?? "").trim())].filter(Boolean))] as string[];
   const [edit, setEdit] = useState<any | null>(null);
   const [form, setForm] = useState<any>(blank);
   const [buy, setBuy] = useState<any | null>(null);
@@ -255,7 +258,17 @@ export default function Products() {
                 التكلفة تختلف عن الحالية ({money(buyProd.cost_price)}) · سياسة التسعير: {user?.org?.pricing_method === "FIFO" ? "الوارد أولاً صادر أولاً" : user?.org?.pricing_method === "WAVG" ? "المتوسط المرجّح" : user?.org?.pricing_method === "LATEST" ? "اعتماد السعر الجديد على كل البضاعة" : "سيُطلب منك اختيارها"}
               </T>
             )}
-            <Field testID="purchase-supplier-input" label="المورد" value={buy.supplier} onChangeText={(v) => setBuy({ ...buy, supplier: v })} />
+            <Select
+              testID="purchase-supplier-select"
+              label="المورد"
+              placeholder={supplierNames.length ? "اختر مورداً محفوظاً" : "لا يوجد موردون محفوظون بعد"}
+              value={supplierNames.includes(buy.supplier) ? buy.supplier : null}
+              options={supplierNames}
+              getLabel={(n: string) => n}
+              getSub={(n: string) => suppliersQ.data?.find((x) => x.name === n)?.phone || ""}
+              onSelect={(n: string) => setBuy({ ...buy, supplier: n })}
+            />
+            <Field testID="purchase-supplier-input" label="أو اكتب اسم مورد جديد" value={buy.supplier} onChangeText={(v) => setBuy({ ...buy, supplier: v })} />
           </>
         )}
       </Sheet>

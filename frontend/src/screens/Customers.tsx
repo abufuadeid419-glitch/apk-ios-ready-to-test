@@ -217,7 +217,7 @@ export default function Customers({ debtsOnly = false }: { debtsOnly?: boolean }
                   <Badge text={money(item.balance)} tone={item.balance > 0 ? "warning" : "success"} />
                   {debtsOnly && item.balance > 0 && <IconBtn testID={`remind-customer-${item.id}`} icon="logo-whatsapp" tone="brand" onPress={() => remind(item)} />}
                   {isAgent && !item.pending && <IconBtn testID={`share-statement-${item.id}`} icon={shareSt.busyId === item.id ? "hourglass-outline" : "document-text-outline"} tone="brand" onPress={() => shareSt.busyId || shareSt.share(item.id)} />}
-                  {!isOwner && item.balance > 0 && <IconBtn testID={`collect-customer-${item.id}`} icon="cash-outline" onPress={() => setCollect(item)} />}
+                  {isAgent && item.balance > 0 && <IconBtn testID={`collect-customer-${item.id}`} icon="cash-outline" onPress={() => setCollect(item)} />}
                   {canEdit && !debtsOnly && !item.pending && <IconBtn testID={`edit-customer-${item.id}`} icon="create-outline" onPress={() => { setTried(false); setForm({ ...item, typeChosen: true }); }} />}
                 </View>
               }

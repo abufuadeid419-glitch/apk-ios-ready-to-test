@@ -43,7 +43,8 @@ export function InvoiceSheet({ doc, onClose }: { doc: any | null; onClose: () =>
   const { user } = useAuth();
   const [reason, setReason] = useState("");
   const voidM = useMutate<any>("POST", (b) => `/sales/${b.id}/void`, "تم إلغاء الفاتورة", onClose);
-  const canVoid = doc?.invoice_no && !doc.voided && !doc.pending && (user?.role === "OWNER" || user?.employee_type === "ACCOUNTANT");
+  // Accountants are read-only: only the owner can void.
+  const canVoid = doc?.invoice_no && !doc.voided && !doc.pending && user?.role === "OWNER";
   return (
     <Sheet testID="invoice-detail-sheet" visible={!!doc} onClose={onClose} title={doc?.invoice_no ?? doc?.return_no ?? ""}>
       {doc && (

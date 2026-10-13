@@ -18,6 +18,7 @@ import type * as edge from "../edge.js";
 import type * as employees from "../employees.js";
 import type * as extra from "../extra.js";
 import type * as http from "../http.js";
+import type * as journal from "../journal.js";
 import type * as lib from "../lib.js";
 import type * as migrate from "../migrate.js";
 import type * as notifications from "../notifications.js";
@@ -50,6 +51,7 @@ declare const fullApi: ApiFromModules<{
   employees: typeof employees;
   extra: typeof extra;
   http: typeof http;
+  journal: typeof journal;
   lib: typeof lib;
   migrate: typeof migrate;
   notifications: typeof notifications;

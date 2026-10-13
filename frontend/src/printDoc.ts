@@ -46,3 +46,11 @@ export async function shareReceipt(d: ReceiptDoc, title: string) {
   }
   await Sharing.shareAsync(uri, { mimeType: "application/pdf", UTI: "com.adobe.pdf", dialogTitle: title });
 }
+
+// Full-page (A4) HTML document → PDF → share sheet (used for the organization backup).
+export async function shareHtmlPdf(html: string, title: string) {
+  let uri = (await Print.printToFileAsync({ html })).uri;
+  if (Platform.OS === "android") uri = namedCopy(uri, title);
+  if (!(await Sharing.isAvailableAsync())) return Print.printAsync({ uri });
+  await Sharing.shareAsync(uri, { mimeType: "application/pdf", UTI: "com.adobe.pdf", dialogTitle: title });
+}

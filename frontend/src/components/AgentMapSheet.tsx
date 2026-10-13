@@ -68,8 +68,8 @@ export function AgentMapSheet({ agent, onClose }: { agent: any | null; onClose: 
   const pts: any[] = trail.data?.points ?? [];
 
   return (
-    <Modal visible={!!agent} animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <View testID="agent-map-sheet" style={{ flex: 1, backgroundColor: colors.surface, paddingTop: insets.top }}>
+    <Modal visible={!!agent} animationType="slide" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
+      <View testID="agent-map-sheet" style={{ flex: 1, backgroundColor: colors.surface, paddingTop: insets.top, paddingBottom: insets.bottom }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm }}>
           <View style={{ flex: 1 }}>
             <T v="h2" numberOfLines={1}>{live?.name ?? live?.email}</T>

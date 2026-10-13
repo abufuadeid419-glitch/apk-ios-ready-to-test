@@ -1,6 +1,20 @@
+import { useEffect } from "react";
+
+import { AGENT_OFFLINE_PATHS, prefetchOffline } from "@/src/hooks";
+import { onSyncComplete } from "@/src/offline";
 import { RoleTabs } from "@/src/RoleTabs";
 
 export default function DistributorLayout() {
+  // Keep everything needed in the field cached for offline work; refresh after each sync.
+  useEffect(() => {
+    prefetchOffline(AGENT_OFFLINE_PATHS);
+    const off = onSyncComplete(() => prefetchOffline(AGENT_OFFLINE_PATHS));
+    const t = setInterval(() => prefetchOffline(AGENT_OFFLINE_PATHS), 5 * 60 * 1000);
+    return () => {
+      off();
+      clearInterval(t);
+    };
+  }, []);
   return (
     <RoleTabs
       tourKey="dist"

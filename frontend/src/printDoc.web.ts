@@ -38,3 +38,18 @@ export async function printReceipt(d: ReceiptDoc) {
 
 // Web has no share sheet: the print dialog offers "Save as PDF" at 80mm.
 export const shareReceipt = (d: ReceiptDoc, _title: string) => printReceipt(d);
+
+// Web: A4 document printed from a hidden iframe ("Save as PDF").
+export async function shareHtmlPdf(html: string, _title: string) {
+  const f = document.createElement("iframe");
+  f.setAttribute("data-testid", "pdf-print-frame");
+  Object.assign(f.style, { position: "fixed", left: "-10000px", top: "0", width: "210mm", height: "100px", border: "0" });
+  document.body.appendChild(f);
+  const w = f.contentWindow!;
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+  w.print();
+  setTimeout(() => f.remove(), 1000);
+}

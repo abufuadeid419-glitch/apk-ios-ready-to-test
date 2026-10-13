@@ -9,30 +9,39 @@ import { useToast } from "@/src/ui";
 
 // GET with offline cache: last good response is persisted; when offline (or while
 // local changes are waiting to sync) the cached copy is served.
+export async function fetchCached<T = any>(path: string): Promise<T> {
+  await syncQueue();
+  if (pendingCount() > 0) {
+    const c = await readCache<T>(path);
+    if (c != null) return c;
+  }
+  try {
+    const d = await api<T>(path);
+    writeCache(path, d);
+    return d;
+  } catch (e: any) {
+    if (e.offline) {
+      const c = await readCache<T>(path);
+      if (c != null) return c;
+    }
+    throw e;
+  }
+}
+
+// Warm the offline cache for everything a distributor needs in the field (customers, stock,
+// prices, previous invoices/vouchers and the encrypted organization identity for receipts).
+export const AGENT_OFFLINE_PATHS = ["/org/profile", "/org/logo", "/customers", "/customer-types", "/my/inventory", "/products", "/sales", "/collections", "/payment-vouchers", "/sales-returns", "/warehouse-returns", "/deliveries", "/stock-requests", "/routes/mine", "/stats/overview", "/targets"];
+export function prefetchOffline(paths: string[]) {
+  return Promise.all(paths.map((p) => queryClient.prefetchQuery({ queryKey: [p], queryFn: () => fetchCached(p), networkMode: "always" }).catch(() => {})));
+}
+
 export function useApi<T = any>(path: string, enabled = true, refetchMs?: number) {
   return useQuery<T>({
     queryKey: [path],
     enabled,
     networkMode: "always",
     refetchInterval: refetchMs ?? false,
-    queryFn: async () => {
-      await syncQueue();
-      if (pendingCount() > 0) {
-        const c = await readCache<T>(path);
-        if (c != null) return c;
-      }
-      try {
-        const d = await api<T>(path);
-        writeCache(path, d);
-        return d;
-      } catch (e: any) {
-        if (e.offline) {
-          const c = await readCache<T>(path);
-          if (c != null) return c;
-        }
-        throw e;
-      }
-    },
+    queryFn: () => fetchCached<T>(path),
   });
 }
 

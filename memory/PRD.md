@@ -80,3 +80,9 @@ Clone the mobile app from https://github.com/abufuadeid419-glitch/apk-ios-code.g
   - Org profile save fix: endpoint tolerates read-only fields; frontend sends only editable keys.
   - New pricing policy LATEST "اعتماد السعر الجديد على كل البضاعة".
   - printDoc: File.copySync (copy() is async in expo-file-system 57) — iteration_6 bug fixed.
+- 2026-06 (batch 5):
+  - Supplier picker in purchase sheet (saved suppliers + past names, or type new).
+  - Offline distributor: dist layout prefetches AGENT_OFFLINE_PATHS (customers, inventory, products, sales, vouchers, returns, routes, org profile+logo…) every 5 min & after sync; sync queue flushes /customers first (dependency order) then other paths in parallel; server writes id-idempotent. Org profile/logo cache encrypted (key in Keychain/Keystore via storage.secure*).
+  - Accountant read-only: HTTP router blocks every non-GET for ACCOUNTANT (except /auth, /notifications); UI hides collect/void. New /journal screen (owner+acct) + GET /api/accounting/journal (all docs with lines, details, debit/credit accounts) + CSV export.
+  - Android safe areas: navigationBarTranslucent on all Modals, AgentMapSheet bottom inset, blocked screen insets.
+  - Backup now PDF only (src/backupPdf.ts): readable business data, no ids/codes.

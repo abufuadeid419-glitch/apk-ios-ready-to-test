@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 8 — Supplier picker, accountant read-only, journal (owner+acct), backup PDF export, offline encrypted org cache, and regression across 4 roles all verified on live Convex fearless-ostrich-878. Backend: 22/22 live API tests PASS in test_iteration_8.py. UI (mobile 390x844, Playwright, Expo web preview): accountant home shows acct-readonly-note + open-journal-button → /journal renders journal-screen with period chips (today/7/30/all), type chip 'كل الأنواع', and journal-export-csv-button (web); owner /journal also renders journal-screen. Supplier picker end-to-end PASS: owner → tab-products → add-purchase-button opens the purchase sheet with purchase-supplier-select (Select component lists TEST_SUP · 0944123456 and TEST_SUPPLIER_2fdf13), picking TEST_SUP fills purchase-supplier-input with 'TEST_SUP'. Note: supplier options use the generic Select testID 'select-option-{index}' (ui.tsx:708) — NOT 'purchase-supplier-option-N' as the review request implied; functional, just a testID naming convention. Encrypted offline cache VERIFIED: localStorage key 'cache:/org/profile' value starts with '\"enc:' (JSON-wrapped prefix) for both owner on /dist and agent on /dist (test_token_agent); 'cache:/org/logo' also encrypted ('\"enc:...'). writeCache in src/offline.ts correctly XOR-encrypts SECURE_PATHS before persisting, keeping org identity available offline for invoices. ACCOUNTANT RBAC strict read-only confirmed at HTTP layer (convex/http.ts:202-206): POST /customers, POST /collections, POST /payment-vouchers, PATCH /sales/:id/void, PUT /org/profile all return 403 with Arabic detail 'حساب المحاسب للقراءة فقط — لا يملك صلاحية التعديل أو الإضافة أو الإلغاء'; GET /customers and GET /notifications still 200. UI side: on /acct the add-customer-button, collect-customer-*, and void-sale-* testIDs are all absent (0 matches). Journal shape verified: entries carry {date,type,type_label,amount,debit_account,credit_account,details,lines}, lines carry unit (قطعة/كرتونة). Agent is correctly rejected from /accounting/journal (STAFF-only). Dev token still denied on /customers. Backup PDF: owner → الإدارة → ملف المؤسسة shows export-backup-button 'تصدير نسخة احتياطية (PDF)'; clicking it invokes shareHtmlPdf (src/printDoc.web.ts) which creates and immediately removes an iframe[data-testid='pdf-print-frame'] after window.print() — functional on web (iframe lifecycle too short for the preview to screenshot stably). CODE REVIEW of src/backupPdf.ts: only business keys are rendered (name/phone/email/address/tax_no/cr_no/currency/alt_currency/exchange_rate/invoice_footer; employees name+role+phone/email; products name/unit/pieces_per_package/sale/cost/stock; customers name/phone/address/balance; sales invoice_no/date/customer_name/distributor_name/items/total/paid_amount/remaining/voided; collections receipt_no/date/customer_name/collector_name/amount/notes; etc.). NO occurrence of user_id, org_id, _id, session_token, api_key, or org_test_1 inside backupPdf.ts. No deprecated expo packages detected (code uses expo-sms, expo-sharing, expo-print, expo-file-system 57 as noted iter7). Guided tour overlay (TourSheet) must be dismissed before interacting with inventory — not a bug, documented.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_8.py",
+    "/app/test_reports/pytest/iter8.xml"
+  ],
+  "action_items": [
+    "OPTIONAL (testID naming): supplier options in the purchase Sheet currently inherit the generic Select testID 'select-option-{index}'. The review request referenced 'purchase-supplier-option-N'. If that explicit naming is a hard spec, pass getOptionTestId prop to Select or add a per-option testID in src/ui.tsx around line 708. Not a bug — picker fully works and value flows into purchase-supplier-input."
+  ],
+  "critical_code_review_comments": [
+    "convex/http.ts:202-206 — RBAC for ACCOUNTANT is enforced at the HTTP layer (not per-route), so adding new mutations stays safe-by-default. Whitelist /auth/* and /notifications/* only, which matches the review spec.",
+    "convex/journal.ts — single query aggregates sales, collections, payment_vouchers, sales_returns, purchases, purchase_returns, supplier_payments, deliveries, warehouse_returns. Each entry carries double-entry debit/credit account labels in Arabic + line-level unit (قطعة/كرتونة). Voided sales are counted in totals.count but excluded from totals.amount — correct for an accounting export.",
+    "src/offline.ts — SECURE_PATHS = {/org/profile,/org/logo} are XOR-encrypted (xorshift128 from 256-bit device key via storage.secureSet('org_cache_key')), stored with 'enc:' prefix. Customers-first dependency ordering in the flush pool (line 294) prevents FK-style failures (sale references customer created offline). 409 is treated as server-authoritative → drops optimistic row + refetch. Backoff 1-16s w/ ±25% jitter, cap 30s, MAX_ATTEMPTS=5, per-path strict order, bounded parallelism PARALLEL=6 across different paths. This design will handle high-load reconnect catch-ups cleanly.",
+    "src/backupPdf.ts — only prints readable business fields through the esc() helper; no technical identifiers reach the PDF. Section counts are rendered in parentheses next to the h2 header, which makes the backup PDF usable as a human handoff document.",
+    "src/printDoc.web.ts:43-55 — shareHtmlPdf creates a 210mm hidden iframe[data-testid='pdf-print-frame'], writes the HTML, calls window.print(), then self-removes after 1s. Works for 'Save as PDF' on web; native uses expo-print.printToFileAsync + expo-sharing (printDoc.ts).",
+    "src/screens/Products.tsx:261-271 — Supplier picker (Select) + free-text Field are both bound to buy.supplier via setBuy, so picking from history OR typing a new name both drive the same submit path. supplierNames source = /suppliers list, with phone as sub-text.",
+    "src/ui.tsx:708 — Select children use testID 'select-option-{index}' (not scoped per field). If the review wants deterministic testIDs for supplier options specifically, extend Select to accept an optionTestId prefix prop. Low-priority ergonomics change."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_8.py"
+  ],
+  "success_rate": {
+    "backend": "100% (22/22)",
+    "frontend": "100% — supplier picker end-to-end, acct readonly note+journal, owner journal, encrypted cache (owner+agent), backup export button all verified; backup iframe self-removes too fast for a stable DOM snapshot on web but button + shareHtmlPdf wiring confirmed in code review"
+  },
+  "seed_data_creation": "None. Used seeded TEST org, TEST_SUP + TEST_SUPPLIER_2fdf13, test_token_owner / test_token_acct / test_token_agent / test_token_dev. No destructive mutations.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "test_iteration_8.py is the regression suite for RBAC + journal + backup + suppliers. Reuse as-is. For supplier picker on web, remember Select renders options as 'select-option-{index}' not 'purchase-supplier-option-N' — the Products.tsx code uses the shared Select; adjust spec or Select wrapper if the review wants scoped testIDs. For PDF backup on web, the iframe lives for ~1s; capture by overriding window.print pre-navigation if a DOM snapshot is needed in a future iteration. Guided-tour TourSheet overlay must be dismissed ('تخطي الجولة') before interacting with navigation tabs on owner/.",
+  "rca_of_issue": "N/A — no bugs found this iteration."
+}
