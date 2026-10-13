@@ -77,13 +77,14 @@ export function AccountButton() {
           <T v="label" style={{ color: colors.onAccent, fontSize: 14 }} testID="account-initials">{initials}</T>
           {pending.length > 0 && (
             <View testID="account-name-chip" style={{ position: "absolute", top: -2, left: -2, width: 10, height: 10, borderRadius: 5, backgroundColor: colors.warning, borderWidth: 2, borderColor: colors.brandPrimary }}>
-              <T v="caption" style={{ fontSize: 0 }} testID="account-role-chip"> </T>
+              <View testID="account-role-chip" />
             </View>
           )}
           {pending.length === 0 && (
             <>
-              <T v="caption" style={{ fontSize: 0, position: "absolute" }} testID="account-name-chip"> </T>
-              <T v="caption" style={{ fontSize: 0, position: "absolute" }} testID="account-role-chip"> </T>
+              {/* Invisible test markers — never use fontSize 0 (Android crashes: "FontSize should be a positive value"). */}
+              <View style={{ position: "absolute", width: 0, height: 0 }} testID="account-name-chip" />
+              <View style={{ position: "absolute", width: 0, height: 0 }} testID="account-role-chip" />
             </>
           )}
         </Pressable>
@@ -132,10 +133,10 @@ export function AccountButton() {
           <Row testID="account-privacy-link" icon="shield-outline" title="سياسة الخصوصية" onPress={() => { setOpen(false); router.push("/legal?doc=privacy"); }} />
         </Card>
         <TrustedDevices open={open} />
-        {user?.role !== "OWNER" && (
+        {user?.role !== "DEVELOPER" && (
           confirmDel ? (
             <Card style={{ gap: spacing.sm }}>
-              <T color="error">سيتم حذف حسابك نهائياً. هل أنت متأكد؟</T>
+              <T color="error">{user?.role === "OWNER" ? "سيتم حذف حسابك والمؤسسة وجميع بياناتها نهائياً، ويُفصل جميع الموظفين. هل أنت متأكد؟" : "سيتم حذف حسابك نهائياً. هل أنت متأكد؟"}</T>
               <Btn testID="confirm-delete-account-button" small variant="danger" title="نعم، احذف حسابي" onPress={async () => {
                 try { await api("/auth/account", { method: "DELETE" }); setOpen(false); router.replace("/goodbye" as any); } catch (e: any) { toast(e.message, "error"); }
               }} />

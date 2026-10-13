@@ -2,10 +2,14 @@ import { useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { FlatList, RefreshControl, View } from "react-native";
 
-import { money } from "@/src/api";
+import { api, money } from "@/src/api";
+import { useAuth } from "@/src/auth";
+import { PricingMethodSheet } from "@/src/components/PricingMethod";
 import { StockLog } from "@/src/components/StockLog";
 import { SupplierStatementsSheet } from "@/src/components/SupplierStatements";
+import { Unit, UnitToggle, piecesOf, pppOf, unitName } from "@/src/components/UnitToggle";
 import { useApi, useBottomChrome, useMutate } from "@/src/hooks";
+import { queryClient } from "@/src/query-client";
 import { spacing, useTheme } from "@/src/theme";
 import { Badge, Btn, Empty, ErrorBox, Field, Header, IconBtn, Loading, Row, Segments, Select, Sheet, T, useToast } from "@/src/ui";
 
@@ -38,7 +42,8 @@ export default function Products() {
   const save = useMutate("POST", "/products", "تم حفظ المنتج", () => setEdit(null));
   const update = useMutate<any>("PUT", (b) => `/products/${b.id}`, "تم تحديث المنتج", () => setEdit(null));
   const del = useMutate<any>("DELETE", (b) => `/products/${b.id}`, "تم حذف المنتج", () => setEdit(null));
-  const purchase = useMutate("POST", "/purchases", "تمت إضافة الكمية للمستودع", () => setBuy(null));
+  const purchase = { isPending: false };
+  const { user } = useAuth();
 
   // Deep link from the owner onboarding guide: open the "new product" sheet automatically.
   const params = useLocalSearchParams<{ new?: string }>();
@@ -86,9 +91,30 @@ export default function Products() {
     if (edit?.id) update.mutate({ ...body, id: edit.id });
     else save.mutate(body);
   };
-  const submitBuy = () => {
+  const [buying, setBuying] = useState(false);
+  const [askPricing, setAskPricing] = useState(false);
+  const buyProd = products.data?.find((p) => p.id === buy?.product_id);
+  const submitBuy = async () => {
     if (!buy.product_id || !(+buy.quantity > 0)) return toast("اختر المنتج وأدخل الكمية", "error");
-    purchase.mutate({ product_id: buy.product_id, quantity: +buy.quantity, unit_cost: +buy.unit_cost || 0, supplier: buy.supplier });
+    setBuying(true);
+    try {
+      await api("/purchases", { method: "POST", body: { product_id: buy.product_id, quantity: +buy.quantity, unit: buy.unit, unit_cost: +buy.unit_cost || 0, supplier: buy.supplier } });
+      queryClient.invalidateQueries();
+      toast("تمت إضافة الكمية للمستودع");
+      setBuy(null);
+    } catch (e: any) {
+      if (String(e?.message).includes("PRICING_METHOD_REQUIRED")) setAskPricing(true);
+      else toast(e.message, "error");
+    } finally {
+      setBuying(false);
+    }
+  };
+  const pickBuyProduct = (p: any) => setBuy({ ...buy, product_id: p.id, unit: "PIECE", unit_cost: String(p.cost_price ?? "") });
+  const setBuyUnit = (u: Unit) => {
+    if (!buyProd || u === buy.unit) return;
+    const c = +buy.unit_cost || 0;
+    const k = pppOf(buyProd);
+    setBuy({ ...buy, unit: u, unit_cost: String(Math.round((u === "PACKAGE" ? c * k : c / k) * 100) / 100) });
   };
   const set = (k: string) => (v: string) => setForm((f: any) => ({ ...f, [k]: v }));
   const ppp = Math.max(1, Math.round(+form.pieces_per_package || 1));
@@ -110,7 +136,7 @@ export default function Products() {
         right={
           <>
             <IconBtn testID="supplier-statements-button" icon="storefront-outline" onPress={() => setSuppliers(true)} />
-            <IconBtn testID="add-purchase-button" icon="download-outline" onPress={() => setBuy({ product_id: null, quantity: "", unit_cost: "", supplier: "" })} />
+            <IconBtn testID="add-purchase-button" icon="download-outline" onPress={() => setBuy({ product_id: null, quantity: "", unit: "PIECE", unit_cost: "", supplier: "" })} />
             <IconBtn testID="add-product-button" icon="add" tone="brand" onPress={() => open()} />
           </>
         }
@@ -189,6 +215,14 @@ export default function Products() {
           <View style={{ flex: 1 }}><Field testID="product-min-stock-input" label="حد التنبيه (قطعة)" keyboardType="decimal-pad" value={form.min_stock} onChangeText={set("min_stock")} /></View>
         </View>
         {ppp > 1 && +form.stock > 0 && <T v="caption" testID="product-stock-hint">= {stockLabel({ ...form, stock: +form.stock, pieces_per_package: ppp })}</T>}
+        {Array.isArray(edit?.cost_layers) && edit.cost_layers.length > 1 && (
+          <View style={{ gap: spacing.xs }} testID="product-fifo-layers">
+            <T v="label">دفعات المخزون (الوارد أولاً صادر أولاً)</T>
+            {edit.cost_layers.map((l: any, i: number) => (
+              <T key={i} v="caption">{i === 0 ? "• الحالية" : `• دفعة ${i + 1}`}: {money(l.qty)} قطعة · تكلفة {money(l.cost)} · بيع {money(l.price)}</T>
+            ))}
+          </View>
+        )}
       </Sheet>
 
       <Sheet
@@ -196,7 +230,7 @@ export default function Products() {
         visible={!!buy}
         onClose={() => setBuy(null)}
         title="إضافة مشتريات للمستودع"
-        footer={<Btn testID="save-purchase-button" title="حفظ المشتريات" icon="checkmark" onPress={submitBuy} loading={purchase.isPending} />}
+        footer={<Btn testID="save-purchase-button" title="حفظ المشتريات" icon="checkmark" onPress={submitBuy} loading={buying} />}
       >
         {buy && (
           <>
@@ -204,20 +238,28 @@ export default function Products() {
               testID="purchase-product-select"
               label="المنتج"
               placeholder="اختر المنتج"
-              value={products.data?.find((p) => p.id === buy.product_id)?.name ?? null}
+              value={buyProd?.name ?? null}
               options={products.data ?? []}
               getLabel={(p: any) => p.name}
-              getSub={(p: any) => `المخزون: ${p.stock}`}
-              onSelect={(p: any) => setBuy({ ...buy, product_id: p.id, unit_cost: String(p.cost_price) })}
+              getSub={(p: any) => `المخزون: ${stockLabel(p)}`}
+              onSelect={pickBuyProduct}
             />
+            {buyProd && <UnitToggle testID="purchase-unit" product={buyProd} value={buy.unit} onChange={setBuyUnit} />}
             <View style={{ flexDirection: "row", gap: spacing.md }}>
-              <View style={{ flex: 1 }}><Field testID="purchase-qty-input" label="الكمية" keyboardType="decimal-pad" value={buy.quantity} onChangeText={(v) => setBuy({ ...buy, quantity: v })} /></View>
-              <View style={{ flex: 1 }}><Field testID="purchase-cost-input" label="تكلفة الوحدة" keyboardType="decimal-pad" value={buy.unit_cost} onChangeText={(v) => setBuy({ ...buy, unit_cost: v })} /></View>
+              <View style={{ flex: 1 }}><Field testID="purchase-qty-input" label={`الكمية (${unitName(buyProd, buy.unit)})`} keyboardType="decimal-pad" value={buy.quantity} onChangeText={(v) => setBuy({ ...buy, quantity: v })} /></View>
+              <View style={{ flex: 1 }}><Field testID="purchase-cost-input" label={`تكلفة ${unitName(buyProd, buy.unit)}`} keyboardType="decimal-pad" value={buy.unit_cost} onChangeText={(v) => setBuy({ ...buy, unit_cost: v })} /></View>
             </View>
+            {buyProd && buy.unit === "PACKAGE" && +buy.quantity > 0 && <T v="caption" testID="purchase-pieces-hint">= {money(piecesOf(buyProd, "PACKAGE", +buy.quantity))} {unitName(buyProd, "PIECE")} تُضاف للمستودع</T>}
+            {buyProd && +buy.unit_cost > 0 && Math.abs((+buy.unit_cost / (buy.unit === "PACKAGE" ? pppOf(buyProd) : 1)) - (buyProd.cost_price ?? 0)) > 0.001 && (
+              <T v="caption" color="warning" testID="purchase-cost-change-hint">
+                التكلفة تختلف عن الحالية ({money(buyProd.cost_price)}) · سياسة التسعير: {user?.org?.pricing_method === "FIFO" ? "الوارد أولاً صادر أولاً" : user?.org?.pricing_method === "WAVG" ? "المتوسط المرجّح" : "سيُطلب منك اختيارها"}
+              </T>
+            )}
             <Field testID="purchase-supplier-input" label="المورد" value={buy.supplier} onChangeText={(v) => setBuy({ ...buy, supplier: v })} />
           </>
         )}
       </Sheet>
+      <PricingMethodSheet visible={askPricing} onClose={() => setAskPricing(false)} onSaved={() => { setAskPricing(false); submitBuy(); }} />
       <SupplierStatementsSheet visible={suppliers} onClose={() => setSuppliers(false)} />
     </View>
   );

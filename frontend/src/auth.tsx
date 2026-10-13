@@ -98,6 +98,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const cached = await storage.getItem<any>(USER_KEY, null);
         if (cached) setUserState(cached as User);
         else await clear();
+        // Re-sync the real profile once the server is reachable again.
+        setTimeout(() => api<User>("/auth/me").then(setUserState).catch(() => {}), 5000);
       }
     })();
     return () => {
@@ -146,11 +148,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const saveName = useCallback(
     (name: string) =>
       run(async () => {
-        await api("/auth/name", { method: "POST", body: { name } });
-        setUserState(await api<User>("/auth/me"));
+        const r = await api<{ name: string }>("/auth/name", { method: "POST", body: { name } });
+        // Keep the saved name even if the profile refresh fails, so the name step never re-appears.
+        setUserState((u) => (u ? { ...u, name: r.name } : u));
+        try {
+          setUserState(await api<User>("/auth/me"));
+        } catch {}
       }),
     [run],
   );
+
+  // Persist the latest profile so offline/slow boots never fall back to a stale (nameless) copy.
+  useEffect(() => {
+    if (user) storage.setItem(USER_KEY, user as any);
+  }, [user]);
 
   const logout = useCallback(async () => {
     try {

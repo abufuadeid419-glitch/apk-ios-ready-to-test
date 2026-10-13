@@ -1,0 +1,33 @@
+{
+  "summary": "Iteration 4 — Verified RBAC (dev cannot delete), dev license creation, pricing method FIFO/WAVG with cost_layers, deliveries with unit=PACKAGE, distributor REST endpoints, revoked-token flow and auth name cache. Backend 36/36 PASS (20 new iteration-4 tests + 16 regression). (7) POST /api/dev/licenses returns 200 with LIC-prefixed code & READY status; non-dev callers rejected. (6) DELETE /api/auth/account as dev → 400 with 'المطور ...صلاحية'; PATCH /api/dev/deletion-requests/x action=approve → 400 'حذف الحسابات متاح للمالك والموظفين فقط'; action=reject passes role check (404 'الطلب غير موجود'). (3) PUT /api/org/pricing-method rejects BOGUS, rejects non-owner; FIFO + new unit_cost=700 creates ≥2 cost_layers while cost_price stays at oldest (500); purchase-return consumes oldest layer; switching to WAVG and buying at 800 clears cost_layers and blends cost_price. (4) POST /api/deliveries with unit=PACKAGE on product 504c618ff... (ppp=10) deducts 10 from owner warehouse stock; agent confirm adds 10 to distributor_inventory. (1) GET /api/notifications and /api/targets return 200 for agent; invalid token → 401. UI (390x844): all 4 roles land on correct routes (/owner /acct /dist /dev) with NO error boundary, NO Unmatched Route. Agent cached_user localStorage key contains name='موزع الاختبار'. Revoked token (bogus_token_xyz) + reload → redirected to /login cleanly, no crash. Dev account sheet (account-button) exposes logout-button but NO delete-account-button (RBAC). Dev licenses tab shows add-license-button and lists existing licences (TEST_UILIC_1791854104 + TEST_lic visible); creating a new license showed Arabic toast 'تم إنشاء الترخيص ✓'. Owner account sheet exposes delete-account-button alongside logout-button. Owner > الإدارة > ملف المؤسسة tab exposes pricing-method-picker, pricing-method-fifo, pricing-method-wavg, save-pricing-method-button, request-deletion-button (all count=1). DID NOT confirm actual deletion for owner/dev/agent/acct test accounts.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_4.py",
+    "/app/backend/tests/test_backend.py",
+    "/app/backend/tests/test_supplier_payments.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "convex/extra.ts devDeletionReview throws 'الطلب غير موجود' with 404 status — fine, but a stricter test could pre-check role regardless of action so dev gets 403 for both approve and reject before resource lookup. Low priority.",
+    "src/auth.tsx line 162-164 writes cached_user whenever user state changes — exactly what the PR requested. Verified live for FIELD_AGENT.",
+    "convex/lib.ts purchaseCostPatch keeps cost_price at FIFO oldest layer and clears layers on WAVG — behavior verified via REST round-trip. Minor: when FIFO stock==0 and a new purchase lands, patch adds the new layer and resets cost_price to that layer's cost; tested indirectly."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_4.py",
+    "/app/test_reports/iteration_4.json",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "success_rate": {"backend": "100% (36/36, 20 new iteration-4 tests)", "frontend": "100% on tested flows"},
+  "seed_data_creation": "Created 1 dev license via REST (TEST_LIC_<uuid>, auto-deleted in teardown) + 1 dev license via UI toast 'TEST_UILIC_<ts>' (left in TEST data). Created 1 TEST_PRICING_<uuid> product on TEST org (stock≈29 after FIFO buy + return + WAVG buy). Created 1 TEST_PROD_... purchase layer and WAVG blended cost on same product. 1 delivery to agent for product 504c618ff... PACKAGE qty=1 (agent confirmed, 10 pieces added to distributor_inventory, 10 pieces removed from warehouse stock). All within org_test_1.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Preview https://error-dis-demo.preview.emergentagent.com. Convex API https://fearless-ostrich-878.eu-west-1.convex.site/api. Tokens in /app/memory/test_credentials.md. Web login: localStorage.setItem('session_token', JSON.stringify('test_token_<role>')) then reload; skip 'تخطي الجولة'. Pricing-method is persisted on TEST org (currently WAVG after this run, cost_layers cleared on that product). To reset FIFO: PUT /api/org/pricing-method {method:'FIFO'} as owner. testIDs confirmed on owner profile tab: pricing-method-picker, pricing-method-fifo, pricing-method-wavg, save-pricing-method-button, request-deletion-button. Owner account sheet: delete-account-button + logout-button. Dev account sheet: logout-button ONLY (no delete-account-button) — RBAC working. Dev licenses tab: add-license-button present; license-org-input / save-license-button are inside an opened sheet whose testIDs weren't found by locator (sheet renders but selectors may differ; UI still works end-to-end as creation toast appeared). Agent cached_user key persists latest name. Revoked session_token → clean redirect to /login. 36/36 backend tests pass.",
+  "rca_of_issue": "N/A — all 7 reported bugs/features verified; no regressions found."
+}

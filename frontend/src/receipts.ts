@@ -192,7 +192,7 @@ export function warehouseReturnReceipt(w: any, org: any, logo: string | null): R
   r.kv("الحالة", w.status === "ACCEPTED" ? "تم الاستلام" : w.status === "REJECTED" ? "مرفوض" : "بانتظار الاستلام");
   r.hr();
   r.push({ t: "ih", a: "الصنف", b: "الكمية" });
-  w.items.forEach((it: any, i: number) => r.push({ t: "item", rows: [{ label: `${i + 1}. ${it.product_name}`, value: money(it.quantity) }] }));
+  w.items.forEach((it: any, i: number) => r.push({ t: "item", rows: [{ label: `${i + 1}. ${it.product_name}`, value: `${money(it.quantity)} ${it.unit_label || "قطعة"}` }] }));
   r.hr();
   r.kv("عدد الأصناف", String(w.items.length));
   if (w.notes) r.text("note", `ملاحظات: ${w.notes}`);

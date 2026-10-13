@@ -210,3 +210,83 @@ export async function checkLowStock(ctx: MutationCtx, org_id: string, productIds
     }
   }
 }
+
+// ---- units: every document line can be entered per piece or per package (stock is always pieces) ----
+export function unitQty(prod: any, unit: string | undefined | null, quantity: number) {
+  const ppp = Math.max(1, Math.round(prod?.pieces_per_package ?? 1));
+  const isPackage = unit === "PACKAGE" && ppp > 1;
+  return {
+    unit: isPackage ? "PACKAGE" : "PIECE",
+    unit_label: isPackage ? prod?.package_unit || "كرتونة" : prod?.unit || "قطعة",
+    quantity: round2(quantity),
+    pieces_per_package: ppp,
+    pieces: round2(quantity * (isPackage ? ppp : 1)),
+  };
+}
+export const linePieces = (it: any) => Number(it?.pieces ?? it?.quantity ?? 0);
+
+// ---- inventory pricing policy when purchase cost changes: FIFO layers or weighted average ----
+async function onHand(ctx: MutationCtx, prod: any) {
+  const inv = await ctx.db.query("distributor_inventory").withIndex("by_org", (q: any) => q.eq("org_id", prod.org_id)).collect();
+  return round2((prod.stock ?? 0) + inv.filter((i: any) => i.product_id === prod.id).reduce((s: number, i: any) => s + Math.max(0, i.quantity ?? 0), 0));
+}
+
+async function logPrice(ctx: MutationCtx, prod: any, oldPrice: number, newPrice: number, by: string | null) {
+  if (Math.abs(oldPrice - newPrice) < 0.0001) return;
+  await ctx.db.insert("price_history", { org_id: prod.org_id, product_id: prod.id, product_name: prod.name, old_price: oldPrice, new_price: newPrice, by, at: nowIso() });
+}
+
+// Returns the product patch for a purchase of `pieces` at `pieceCost` (both in the product's currency).
+// Throws PRICING_METHOD_REQUIRED when the cost changes, old goods are on hand and the owner hasn't chosen a policy.
+export async function purchaseCostPatch(ctx: MutationCtx, user: any, prod: any, pieces: number, pieceCost: number) {
+  const org: any = await orgById(ctx, prod.org_id);
+  const method = org?.pricing_method as "FIFO" | "WAVG" | undefined;
+  const oldCost = prod.cost_price ?? 0;
+  const oldPrice = prod.sale_price ?? 0;
+  const ppp = Math.max(1, Math.round(prod.pieces_per_package ?? 1));
+  const held = await onHand(ctx, prod);
+  const changed = Math.abs(pieceCost - oldCost) > 0.0001;
+  if (changed && held > 0 && !method) throw new Error("PRICING_METHOD_REQUIRED");
+  // Keep the same markup for the new goods.
+  const scaled = method && changed && oldCost > 0 ? round2((oldPrice * pieceCost) / oldCost) : oldPrice;
+  const patch: any = { cost_price: round2(pieceCost) };
+  if (method === "WAVG" && held > 0) {
+    const avg = round2((held * oldCost + pieces * pieceCost) / (held + pieces));
+    const price = oldCost > 0 ? round2((oldPrice * avg) / oldCost) : oldPrice;
+    Object.assign(patch, { cost_price: avg, sale_price: price, package_price: round2(price * ppp), cost_layers: [] });
+  } else if (method === "FIFO") {
+    let layers: any[] = Array.isArray(prod.cost_layers) ? prod.cost_layers.filter((l: any) => l.qty > 0) : [];
+    if (Math.abs(layers.reduce((s, l) => s + l.qty, 0) - held) > 0.001) layers = held > 0 ? [{ qty: held, cost: oldCost, price: oldPrice, at: prod.created_at ?? nowIso() }] : [];
+    layers.push({ qty: round2(pieces), cost: round2(pieceCost), price: scaled, at: nowIso() });
+    const front = layers[0];
+    Object.assign(patch, { cost_layers: layers, cost_price: front.cost, sale_price: front.price, package_price: round2(front.price * ppp) });
+  } else if (method && held <= 0) {
+    Object.assign(patch, { sale_price: scaled, package_price: round2(scaled * ppp) });
+  }
+  if (patch.sale_price !== undefined) await logPrice(ctx, prod, oldPrice, patch.sale_price, user.name ?? null);
+  return patch;
+}
+
+// FIFO: goods leaving stock (sales / purchase returns) consume the oldest layer first; when it runs out
+// the product switches to the next layer's cost and sale price.
+export async function consumeFifo(ctx: MutationCtx, org_id: string, product_id: string, pieces: number, by: string | null) {
+  const prod: any = await docOrgUnique(ctx, "products", product_id, org_id);
+  if (!prod || !Array.isArray(prod.cost_layers) || !prod.cost_layers.length) return;
+  const org: any = await orgById(ctx, org_id);
+  if (org?.pricing_method !== "FIFO") return;
+  let left = pieces;
+  const layers = prod.cost_layers.map((l: any) => ({ ...l }));
+  while (left > 0.0001 && layers.length) {
+    const take = Math.min(layers[0].qty, left);
+    layers[0].qty = round2(layers[0].qty - take);
+    left -= take;
+    if (layers[0].qty <= 0.0001) layers.shift();
+  }
+  const patch: any = { cost_layers: layers };
+  if (layers.length) {
+    const ppp = Math.max(1, Math.round(prod.pieces_per_package ?? 1));
+    Object.assign(patch, { cost_price: layers[0].cost, sale_price: layers[0].price, package_price: round2(layers[0].price * ppp) });
+    await logPrice(ctx, prod, prod.sale_price ?? 0, layers[0].price, by);
+  }
+  await ctx.db.patch(prod._id, patch);
+}

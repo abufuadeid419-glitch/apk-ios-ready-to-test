@@ -10,7 +10,8 @@ import { VoucherKind, VoucherSheet } from "@/src/components/VoucherSheet";
 import { SyncBanner } from "@/src/components/SyncBanner";
 import { useApi, useBottomChrome, useMutate } from "@/src/hooks";
 import { offlineReturn } from "@/src/offlineActions";
-import { usePriceResolver } from "@/src/pricing";
+import { toBaseSyp, useExchangeRate, usePriceResolver } from "@/src/pricing";
+import { Unit, UnitToggle, piecesOf, pppOf, qtyLabel, unitName } from "@/src/components/UnitToggle";
 import { fonts, radius, spacing, useTheme } from "@/src/theme";
 import { Badge, Btn, Card, Empty, ErrorBox, Field, Header, IconBtn, Loading, Row, Segments, Select, Sheet, T, useToast } from "@/src/ui";
 
@@ -97,17 +98,20 @@ export function ReturnSheet({ visible, onClose }: { visible: boolean; onClose: (
   const [cust, setCust] = useState<any>(null);
   const [prod, setProd] = useState<any>(null);
   const [qty, setQty] = useState("");
+  const [unit, setUnit] = useState<Unit>("PIECE");
   const resolve = usePriceResolver();
-  const price = prod ? resolve(cust, prod.id, prod.sale_price) : 0;
+  const rate = useExchangeRate();
+  const piece = prod ? toBaseSyp(resolve(cust, prod.id, prod.sale_price), prod.price_currency, rate) : 0;
+  const price = Math.round(piece * (unit === "PACKAGE" ? pppOf(prod) : 1) * 100) / 100;
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
   const submit = async () => {
     if (!cust || !prod || !(+qty > 0)) return toast("أكمل بيانات المرتجع", "error");
     setSaving(true);
     try {
-      await offlineReturn({ customer: cust, line: { product_id: prod.id, product_name: prod.name, quantity: +qty, price }, reason, userName: user?.name });
+      await offlineReturn({ customer: cust, line: { product_id: prod.id, product_name: prod.name, quantity: +qty, price, unit, unit_label: unitName(prod, unit), pieces: piecesOf(prod, unit, +qty) }, reason, userName: user?.name });
       toast("تم تسجيل المرتجع");
-      setCust(null); setProd(null); setQty(""); setReason("");
+      setCust(null); setProd(null); setQty(""); setUnit("PIECE"); setReason("");
       onClose();
     } finally {
       setSaving(false);
@@ -116,10 +120,11 @@ export function ReturnSheet({ visible, onClose }: { visible: boolean; onClose: (
   return (
     <Sheet testID="return-form-sheet" visible={visible} onClose={onClose} title="مرتجع مبيعات" footer={<Btn testID="save-return-button" title="حفظ المرتجع" icon="return-down-back-outline" onPress={submit} loading={saving} />}>
       <Select testID="return-customer-select" label="العميل" placeholder="اختر العميل" value={cust?.name ?? null} options={customers.data ?? []} getLabel={(c: any) => c.name} onSelect={setCust} />
-      <Select testID="return-product-select" label="المنتج" placeholder="اختر المنتج" value={prod?.name ?? null} options={products.data ?? []} getLabel={(p: any) => p.name} onSelect={setProd} />
+      <Select testID="return-product-select" label="المنتج" placeholder="اختر المنتج" value={prod?.name ?? null} options={products.data ?? []} getLabel={(p: any) => p.name} onSelect={(p: any) => { setProd(p); setUnit("PIECE"); }} />
+      {prod && <UnitToggle testID="return-unit" product={prod} value={unit} onChange={setUnit} />}
       <View style={{ flexDirection: "row", gap: spacing.md }}>
-        <View style={{ flex: 1 }}><Field testID="return-qty-input" label="الكمية" keyboardType="decimal-pad" value={qty} onChangeText={setQty} /></View>
-        <View style={{ flex: 1, justifyContent: "flex-end", paddingBottom: spacing.sm }}><T v="caption">السعر</T><T v="h2" testID="return-price">{money(price)}</T></View>
+        <View style={{ flex: 1 }}><Field testID="return-qty-input" label={`الكمية (${unitName(prod, unit)})`} keyboardType="decimal-pad" value={qty} onChangeText={setQty} /></View>
+        <View style={{ flex: 1, justifyContent: "flex-end", paddingBottom: spacing.sm }}><T v="caption">سعر {unitName(prod, unit)}</T><T v="h2" testID="return-price">{money(price)}</T></View>
       </View>
       <Field testID="return-reason-input" label="سبب الإرجاع" value={reason} onChangeText={setReason} />
     </Sheet>
@@ -204,7 +209,7 @@ export default function Sales({ tabs = ["sales", "returns"], title = "الفوا
           ListEmptyComponent={<Empty icon="receipt-outline" text={`لا توجد ${labels[tab]} بعد`} />}
           renderItem={({ item }) =>
             tab === "purchases" || tab === "purchase_returns" ? (
-              <Row testID={`${tab}-row-${item.id}`} icon={tab === "purchases" ? "download-outline" : "arrow-undo-outline"} title={`${item.product_name} × ${money(item.quantity)}`} subtitle={`${item.supplier || "بدون مورد"} · ${fmtDate(item.created_at)}${item.reason ? " · " + item.reason : ""}`} right={<T v="label">{money(item.total)}</T>} />
+              <Row testID={`${tab}-row-${item.id}`} icon={tab === "purchases" ? "download-outline" : "arrow-undo-outline"} title={`${item.product_name} × ${qtyLabel(item)}`} subtitle={`${item.supplier || "بدون مورد"} · ${fmtDate(item.created_at)}${item.reason ? " · " + item.reason : ""}`} right={<T v="label">{money(item.total)}</T>} />
             ) : tab === "collections" || tab === "payments" ? (
               <Row
                 testID={`${tab === "collections" ? "collection" : "payment"}-row-${item.id}`}

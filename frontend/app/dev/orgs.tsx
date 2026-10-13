@@ -23,9 +23,9 @@ function DeletionRequests() {
           <T v="caption">{r.owner_email} · {fmtDate(r.created_at)}</T>
           {!!r.reason && <T>{r.reason}</T>}
           {r.status === "PENDING" && (
-            <View style={{ flexDirection: "row", gap: spacing.sm }}>
-              <Btn testID={`approve-deletion-${r.id}`} small variant="danger" style={{ flex: 1 }} title="حذف نهائي" icon="trash" onPress={() => review.mutate({ id: r.id, action: "approve" })} />
-              <Btn testID={`reject-deletion-${r.id}`} small variant="secondary" style={{ flex: 1 }} title="رفض" onPress={() => review.mutate({ id: r.id, action: "reject" })} />
+            <View style={{ gap: spacing.xs }}>
+              <T v="caption">حذف الحسابات متاح للمالك من داخل حسابه فقط.</T>
+              <Btn testID={`reject-deletion-${r.id}`} small variant="secondary" title="إغلاق الطلب" onPress={() => review.mutate({ id: r.id, action: "reject" })} />
             </View>
           )}
         </Card>

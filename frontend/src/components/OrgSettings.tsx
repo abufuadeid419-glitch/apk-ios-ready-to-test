@@ -2,7 +2,9 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { useState } from "react";
 import { Platform, Switch, View } from "react-native";
+import { useRouter } from "expo-router";
 
+import { PricingMethodPicker } from "@/src/components/PricingMethod";
 import { api, fmtDate } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { useApi, useMutate } from "@/src/hooks";
@@ -90,11 +92,20 @@ export function OrgSettings() {
   const org = user?.org ?? {};
   const [cur, setCur] = useState({ currency: org.currency ?? "ل.س", alt_currency: org.alt_currency ?? "", exchange_rate: String(org.exchange_rate ?? "") });
   const saveCur = useMutate("PUT", "/org/currency", "تم حفظ إعدادات العملة", () => refresh());
-  const dels = useApi<any[]>("/deletion-requests");
-  const pendingDel = dels.data?.find((d) => d.status === "PENDING");
-  const [reason, setReason] = useState("");
-  const reqDel = useMutate("POST", "/deletion-requests", "تم إرسال طلب حذف المؤسسة");
-  const cancelDel = useMutate<any>("DELETE", (b) => `/deletion-requests/${b.id}`, "تم إلغاء طلب الحذف");
+  const [confirmDel, setConfirmDel] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const router = useRouter();
+  const deleteOrg = async () => {
+    setDeleting(true);
+    try {
+      await api("/auth/account", { method: "DELETE" });
+      router.replace("/goodbye" as any);
+    } catch (e: any) {
+      toast(e.message, "error");
+    } finally {
+      setDeleting(false);
+    }
+  };
   const [exporting, setExporting] = useState(false);
 
   const exportBackup = async () => {
@@ -139,23 +150,26 @@ export function OrgSettings() {
         <DebtSmsSection />
       </ProLock>
 
+      <Section title="سياسة التسعير عند تغيّر التكلفة">
+        <PricingMethodPicker />
+      </Section>
+
       <Section title="النسخ الاحتياطي">
         <T v="caption">صدّر جميع بيانات المؤسسة (المنتجات، العملاء، الفواتير، التحصيلات، المشتريات...) كملف JSON.</T>
         <Btn testID="export-backup-button" variant="secondary" icon="cloud-download-outline" title="تصدير نسخة احتياطية" loading={exporting} onPress={exportBackup} />
       </Section>
 
-      <Section title="حذف المؤسسة">
-        {pendingDel ? (
-          <Card style={{ gap: spacing.sm }}>
-            <Badge text="طلب الحذف قيد المراجعة" tone="warning" />
-            <T v="caption">أرسل في {fmtDate(pendingDel.created_at)}</T>
-            <Btn testID="cancel-deletion-button" small variant="ghost" title="إلغاء طلب الحذف" onPress={() => cancelDel.mutate(pendingDel)} />
+      <Section title="حذف المؤسسة والحساب">
+        {confirmDel ? (
+          <Card style={{ gap: spacing.sm }} testID="org-delete-confirm-card">
+            <T color="error">سيتم حذف المؤسسة وجميع بياناتها وحسابك نهائياً، ويُفصل جميع الموظفين. لا يمكن التراجع.</T>
+            <Btn testID="confirm-org-delete-button" small variant="danger" icon="trash" title="نعم، احذف نهائياً" loading={deleting} onPress={deleteOrg} />
+            <Btn testID="cancel-org-delete-button" small variant="ghost" title="إلغاء" onPress={() => setConfirmDel(false)} />
           </Card>
         ) : (
           <>
-            <T v="caption">سيتم حذف جميع بيانات المؤسسة نهائياً بعد موافقة الإدارة. ننصح بتصدير نسخة احتياطية أولاً.</T>
-            <Field testID="deletion-reason-input" label="سبب الحذف" value={reason} onChangeText={setReason} />
-            <Btn testID="request-deletion-button" small variant="danger" icon="trash-outline" title="طلب حذف المؤسسة" loading={reqDel.isPending} onPress={() => reqDel.mutate({ reason })} />
+            <T v="caption">يمكن للمالك حذف المؤسسة وحسابه مباشرة. ننصح بتصدير نسخة احتياطية أولاً.</T>
+            <Btn testID="request-deletion-button" small variant="danger" icon="trash-outline" title="حذف المؤسسة وحسابي" onPress={() => setConfirmDel(true)} />
           </>
         )}
       </Section>

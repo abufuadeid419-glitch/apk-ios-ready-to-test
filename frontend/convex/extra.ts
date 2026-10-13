@@ -2,6 +2,8 @@ import { v } from "convex/values";
 
 import { internalMutation, mutation, query } from "./_generated/server";
 import {
+  genCode,
+  linePieces,
   ANY_ORG,
   DEV,
   OWNER,
@@ -53,15 +55,30 @@ export const consent = mutation({
   },
 });
 
+// Account deletion (RBAC): owners and employees may delete their own account; developers may not.
+// An owner deleting their account deletes the whole organization and its data.
 export const deleteAccount = mutation({
   args: { token: v.string() },
   handler: async (ctx, { token }) => {
     const user = await getUser(ctx, token);
-    if (user.role === "OWNER") throw new Error("المالك يجب أن يطلب حذف المؤسسة أولاً");
+    if (user.role === "DEVELOPER") throw new Error("حساب المطور لا يملك صلاحية حذف الحسابات");
+    if (user.role === "OWNER" && user.org_id) await wipeOrg(ctx, user.org_id);
     for (const s of await ctx.db.query("user_sessions").withIndex("by_user", (q) => q.eq("user_id", user.user_id)).collect()) await ctx.db.delete(s._id);
     for (const n of await ctx.db.query("notifications").withIndex("by_user", (q) => q.eq("user_id", user.user_id)).collect()) await ctx.db.delete(n._id);
     await ctx.db.delete(user._id);
     return { ok: true };
+  },
+});
+
+// PUT /api/org/pricing-method (OWNER) — how sale prices follow purchase-cost changes: FIFO | WAVG.
+export const orgPricingMethod = mutation({
+  args: { token: v.string(), method: v.string() },
+  handler: async (ctx, a) => {
+    const user = await require(ctx, a.token, OWNER);
+    if (a.method !== "FIFO" && a.method !== "WAVG") throw new Error("طريقة التسعير غير صالحة");
+    const org: any = await orgById(ctx, user.org_id!);
+    await ctx.db.patch(org._id, { pricing_method: a.method });
+    return { pricing_method: a.method };
   },
 });
 
@@ -74,8 +91,8 @@ export const voidSale = mutation({
     if (!s || s.voided) throw new Error("الفاتورة غير موجودة أو ملغاة");
     for (const it of s.items || []) {
       const inv = await ctx.db.query("distributor_inventory").withIndex("by_dist_product", (q) => q.eq("distributor_id", s.distributor_id).eq("product_id", it.product_id)).unique();
-      if (inv) await ctx.db.patch(inv._id, { quantity: round2((inv.quantity ?? 0) + it.quantity) });
-      await ctx.db.insert("stock_movements", { org_id: user.org_id!, product_id: it.product_id, product_name: it.product_name, type: "SALE_VOID", qty: it.quantity, by: user.name ?? null, by_role: "AGENT", at: nowIso() });
+      if (inv) await ctx.db.patch(inv._id, { quantity: round2((inv.quantity ?? 0) + linePieces(it)) });
+      await ctx.db.insert("stock_movements", { org_id: user.org_id!, product_id: it.product_id, product_name: it.product_name, type: "SALE_VOID", qty: linePieces(it), by: user.name ?? null, by_role: "AGENT", at: nowIso() });
     }
     const cust = await docOrgUnique(ctx, "customers", s.customer_id, user.org_id!);
     if (cust) await ctx.db.patch(cust._id, { balance: round2((cust.balance ?? 0) - (s.remaining ?? 0)) });
@@ -470,14 +487,14 @@ export const statsReports = query({
     for (const s of (await ctx.db.query("sales").withIndex("by_org", (q) => q.eq("org_id", org)).collect())) {
       if (s.voided || String(s.created_at) < start) continue;
       const k = bucketKey(new Date(s.created_at as string), period);
-      if (buckets[k]) { buckets[k].sales += s.total; buckets[k].count += 1; buckets[k].profit += s.total - (s.items || []).reduce((m: number, it: any) => m + (costs[it.product_id] || 0) * it.quantity, 0); }
+      if (buckets[k]) { buckets[k].sales += s.total; buckets[k].count += 1; buckets[k].profit += s.total - (s.items || []).reduce((m: number, it: any) => m + (costs[it.product_id] || 0) * linePieces(it), 0); }
     }
     for (const c of (await ctx.db.query("collections").withIndex("by_org", (q) => q.eq("org_id", org)).collect())) {
       if (String(c.created_at) < start) continue; const k = bucketKey(new Date(c.created_at as string), period); if (buckets[k]) buckets[k].collections += c.amount;
     }
     for (const r of (await ctx.db.query("sales_returns").withIndex("by_org", (q) => q.eq("org_id", org)).collect())) {
       if (String(r.created_at) < start) continue; const k = bucketKey(new Date(r.created_at as string), period);
-      if (buckets[k]) { buckets[k].returns += r.total; buckets[k].profit -= r.total - (r.items || []).reduce((m: number, it: any) => m + (costs[it.product_id] || 0) * it.quantity, 0); }
+      if (buckets[k]) { buckets[k].returns += r.total; buckets[k].profit -= r.total - (r.items || []).reduce((m: number, it: any) => m + (costs[it.product_id] || 0) * linePieces(it), 0); }
     }
     const rows = keys.map((k) => { const b = buckets[k]; for (const f of ["sales", "collections", "returns", "profit"]) b[f] = round2(b[f]); if (!isOwner) b.profit = null; return b; });
     const totals: any = {};
@@ -509,7 +526,6 @@ export const devLicensesCreate = mutation({
   args: { token: v.string(), org_name: v.string(), days: v.optional(v.number()), max_employees: v.optional(v.number()) },
   handler: async (ctx, a) => {
     await require(ctx, a.token, DEV);
-    const { genCode } = await import("./lib");
     const doc = { id: newId(), code: genCode("LIC-"), org_name: a.org_name, days: a.days ?? 365, max_employees: a.max_employees ?? 10, status: "READY", created_at: nowIso() };
     await ctx.db.insert("licenses", doc);
     return doc;
@@ -640,28 +656,29 @@ export const devVersionDelete = mutation({
   handler: async (ctx, { token, id }) => { await require(ctx, token, DEV); const v2 = (await ctx.db.query("app_versions").collect()).find((x) => x.id === id); if (v2) await ctx.db.delete(v2._id); return { ok: true }; },
 });
 
-const ORG_COLLECTIONS = ["products", "customers", "customer_types", "sales", "collections", "sales_returns", "purchases", "purchase_returns", "deliveries", "distributor_inventory", "stock_movements", "routes", "stock_requests", "invitations", "counters", "agent_locations", "price_history", "upgrade_requests", "payment_vouchers", "warehouse_returns"];
+const ORG_COLLECTIONS = ["products", "customers", "customer_types", "sales", "collections", "sales_returns", "purchases", "purchase_returns", "deliveries", "distributor_inventory", "stock_movements", "routes", "stock_requests", "invitations", "counters", "agent_locations", "price_history", "upgrade_requests", "payment_vouchers", "warehouse_returns", "supplier_payments"];
 
 export const devDeletionReview = mutation({
   args: { token: v.string(), id: v.string(), action: v.string(), note: v.optional(v.string()) },
   handler: async (ctx, a) => {
     await require(ctx, a.token, DEV);
+    // Developers can no longer delete accounts/organizations — owners delete their own account directly.
+    if (a.action === "approve") throw new Error("حذف الحسابات متاح للمالك والموظفين فقط");
     const req: any = (await ctx.db.query("deletion_requests").withIndex("by_biz_id", (q) => q.eq("id", a.id)).unique());
     if (!req || req.status !== "PENDING") throw new Error("الطلب غير موجود");
-    let status: string;
-    if (a.action === "approve") {
-      const org = req.org_id;
-      for (const c of ORG_COLLECTIONS) {
-        const rows = await ctx.db.query(c as any).filter((q: any) => q.eq(q.field("org_id"), org)).collect();
-        for (const r of rows) await ctx.db.delete(r._id);
-      }
-      const members = (await ctx.db.query("users").withIndex("by_org", (q) => q.eq("org_id", org)).collect());
-      for (const m of members) await ctx.db.patch(m._id, { role: null, employee_type: null, org_id: null });
-      const o = await ctx.db.query("organizations").withIndex("by_biz_id", (q) => q.eq("id", org)).unique();
-      if (o) await ctx.db.delete(o._id);
-      status = "APPROVED";
-    } else status = "REJECTED";
-    await ctx.db.patch(req._id, { status, reviewed_at: nowIso() });
-    return { ok: true, status };
+    await ctx.db.patch(req._id, { status: "REJECTED", reviewed_at: nowIso() });
+    return { ok: true, status: "REJECTED" };
   },
 });
+
+async function wipeOrg(ctx: any, org: string) {
+  for (const c of ORG_COLLECTIONS) {
+    const rows = await ctx.db.query(c as any).filter((q: any) => q.eq(q.field("org_id"), org)).collect();
+    for (const r of rows) await ctx.db.delete(r._id);
+  }
+  for (const r of await ctx.db.query("deletion_requests").withIndex("by_org", (q: any) => q.eq("org_id", org)).collect()) await ctx.db.delete(r._id);
+  const members = await ctx.db.query("users").withIndex("by_org", (q: any) => q.eq("org_id", org)).collect();
+  for (const m of members) await ctx.db.patch(m._id, { role: null, employee_type: null, org_id: null });
+  const o = await ctx.db.query("organizations").withIndex("by_biz_id", (q: any) => q.eq("id", org)).unique();
+  if (o) await ctx.db.delete(o._id);
+}

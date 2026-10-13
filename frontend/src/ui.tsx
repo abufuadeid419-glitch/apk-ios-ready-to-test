@@ -16,7 +16,8 @@ import {
   View,
   ViewStyle,
 } from "react-native";
-import { KeyboardAvoidingView, KeyboardAwareScrollView } from "react-native-keyboard-controller";
+import Reanimated, { useAnimatedStyle } from "react-native-reanimated";
+import { KeyboardAwareScrollView, useReanimatedKeyboardAnimation } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { fonts, makeStyles, radius, spacing, ThemeColors, useTheme } from "@/src/theme";
@@ -611,12 +612,16 @@ export function Sheet({
 }) {
   const styles = useSheetStyles();
   const insets = useSafeAreaInsets();
+  // Lift the whole sheet (incl. footer CTA) frame-by-frame with the keyboard (no KeyboardAvoidingView
+  // re-layout jumps inside the Modal); the bottom safe-area pad fades out as the keyboard covers it.
+  const { height: kbH, progress: kbP } = useReanimatedKeyboardAnimation();
+  const lift = useAnimatedStyle(() => ({ paddingBottom: Math.max(0, -kbH.value) }));
+  const pad = useAnimatedStyle(() => ({ paddingBottom: insets.bottom * (1 - kbP.value) + spacing.md }));
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      {/* Lift the whole sheet (incl. footer CTA) above the keyboard; the inner scroll keeps the focused field visible. */}
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.backdrop}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
+      <Reanimated.View style={[styles.backdrop, lift]}>
         <Pressable style={{ flex: 1 }} onPress={onClose} testID="sheet-backdrop" />
-        <View testID={testID} style={[styles.sheet, { paddingBottom: insets.bottom + spacing.md }]}>
+        <Reanimated.View testID={testID} style={[styles.sheet, pad]}>
           <View style={styles.handle} />
           <View style={styles.head}>
             <T v="h2" style={{ flex: 1 }}>{title}</T>
@@ -626,8 +631,8 @@ export function Sheet({
             {children}
           </KeyboardAwareScrollView>
           {footer && <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.sm, gap: spacing.sm }}>{footer}</View>}
-        </View>
-      </KeyboardAvoidingView>
+        </Reanimated.View>
+      </Reanimated.View>
     </Modal>
   );
 }

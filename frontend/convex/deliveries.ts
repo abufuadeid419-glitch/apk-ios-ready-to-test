@@ -2,6 +2,8 @@ import { v } from "convex/values";
 
 import { mutation, query } from "./_generated/server";
 import {
+  linePieces,
+  unitQty,
   AGENT,
   ANY_ORG,
   OWNER,
@@ -21,7 +23,7 @@ import {
   round2,
 } from "./lib";
 
-const qtyItem = v.object({ product_id: v.string(), quantity: v.number() });
+const qtyItem = v.object({ product_id: v.string(), quantity: v.number(), unit: v.optional(v.string()) });
 
 // ========================= Deliveries (warehouse -> distributor) =========================
 export const list = query({
@@ -51,13 +53,14 @@ async function makeDelivery(ctx: any, user: any, distributor_id: string, items: 
   const lines: any[] = [];
   for (const it of items) {
     const prod = await docOrgUnique(ctx, "products", it.product_id, user.org_id);
-    if (!prod || (prod.stock ?? 0) < it.quantity) throw new Error(`الكمية غير متوفرة في المستودع: ${prod?.name ?? ""}`);
-    lines.push({ product_id: prod.id, product_name: prod.name, quantity: it.quantity });
+    const u = unitQty(prod, it.unit, it.quantity);
+    if (!prod || (prod.stock ?? 0) < u.pieces - 0.0001) throw new Error(`الكمية غير متوفرة في المستودع: ${prod?.name ?? ""}`);
+    lines.push({ product_id: prod.id, product_name: prod.name, ...u });
   }
   for (const it of lines) {
     const prod = await docOrgUnique(ctx, "products", it.product_id, user.org_id);
-    if (prod) await ctx.db.patch(prod._id, { stock: round2((prod.stock ?? 0) - it.quantity) });
-    await logMovement(ctx, user.org_id, it.product_id, it.product_name, "DELIVERY", -it.quantity, user.name ?? null, "WAREHOUSE");
+    if (prod) await ctx.db.patch(prod._id, { stock: round2((prod.stock ?? 0) - it.pieces) });
+    await logMovement(ctx, user.org_id, it.product_id, it.product_name, "DELIVERY", -it.pieces, user.name ?? null, "WAREHOUSE");
   }
   const doc = {
     id: newId(),
@@ -89,7 +92,7 @@ export const confirm = mutation({
     const user = await require(ctx, token, AGENT);
     const d = await docById(ctx, "deliveries", id);
     if (!d || d.distributor_id !== user.user_id || d.status !== "PENDING") throw new Error("الشحنة غير موجودة أو تمت معالجتها");
-    for (const it of d.items) await invAdjust(ctx, user.org_id!, user.user_id, it.product_id, it.product_name, it.quantity);
+    for (const it of d.items) await invAdjust(ctx, user.org_id!, user.user_id, it.product_id, it.product_name, linePieces(it));
     await ctx.db.patch(d._id, { status: "CONFIRMED", handled_at: nowIso() });
     await notify(ctx, await orgOwnerIds(ctx, user.org_id!), "delivery_confirmed", "تم استلام الشحنة", `${user.name ?? ""} أكد استلام الشحنة`);
     return clean(await ctx.db.get(d._id));
@@ -104,8 +107,8 @@ export const reject = mutation({
     if (!d || d.distributor_id !== user.user_id || d.status !== "PENDING") throw new Error("الشحنة غير موجودة أو تمت معالجتها");
     for (const it of d.items) {
       const prod = await docOrgUnique(ctx, "products", it.product_id, user.org_id!);
-      if (prod) await ctx.db.patch(prod._id, { stock: round2((prod.stock ?? 0) + it.quantity) });
-      await logMovement(ctx, user.org_id!, it.product_id, it.product_name, "DELIVERY_REJECTED", it.quantity, user.name ?? null, "WAREHOUSE");
+      if (prod) await ctx.db.patch(prod._id, { stock: round2((prod.stock ?? 0) + linePieces(it)) });
+      await logMovement(ctx, user.org_id!, it.product_id, it.product_name, "DELIVERY_REJECTED", linePieces(it), user.name ?? null, "WAREHOUSE");
     }
     await ctx.db.patch(d._id, { status: "REJECTED", handled_at: nowIso() });
     await notify(ctx, await orgOwnerIds(ctx, user.org_id!), "delivery_rejected", "تم رفض شحنة", `${user.name ?? ""} رفض الشحنة وأعيدت الكمية للمستودع`);
@@ -178,7 +181,7 @@ export const createRequest = mutation({
     const items: any[] = [];
     for (const it of a.items) {
       const prod = await docOrgUnique(ctx, "products", it.product_id, user.org_id!);
-      if (prod) items.push({ product_id: prod.id, product_name: prod.name, quantity: it.quantity });
+      if (prod) items.push({ product_id: prod.id, product_name: prod.name, ...unitQty(prod, it.unit, it.quantity) });
     }
     const doc = {
       id: a.id || newId(),

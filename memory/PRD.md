@@ -62,3 +62,12 @@ Clone the mobile app from https://github.com/abufuadeid419-glitch/apk-ios-code.g
 ## Backlog
 - Supplier payments (سند صرف لمورد) so supplier balances reflect payments, not just purchases/returns.
 - 2026-06: Supplier payments (سند صرف لمورد): new Convex table `supplier_payments`, `GET/POST /api/supplier-payments` (owner creates, staff lists; blocks overpayment; USD→SYP at current rate). Supplier statements now subtract payments; record payment form + per-payment voucher PDF in the supplier sheet.
+- 2026-06 (batch 3):
+  - Distributor crash: Convex `useQuery` (throws in render on any server error, e.g. revoked session) replaced by REST `useApi` polling in NotificationBell + SalesTargets (MyTargetCard on distributor home). app/dist routes present.
+  - Name re-prompt: auth now persists the latest profile to cache on every change (was caching the nameless OTP user → offline/slow boots re-asked the name); saveName keeps the name even if /auth/me refresh fails.
+  - Pricing policy on cost change: org.pricing_method FIFO | WAVG (PUT /api/org/pricing-method). Purchases with a different cost and stock on hand return PRICING_METHOD_REQUIRED → owner sheet asks once. WAVG = weighted cost, sale price keeps markup. FIFO = product.cost_layers; sales/purchase returns consume oldest layer; price moves to next layer when exhausted. Settings in الإدارة ← ملف المؤسسة.
+  - Units (piece/package) across purchases, purchase returns, deliveries, customer returns, warehouse returns, stock requests (backend `unitQty`, stock always pieces); void + profit use pieces.
+  - Keyboard: Sheet uses Reanimated keyboard lift (no KeyboardAvoidingView in Modal) + navigationBarTranslucent.
+  - RBAC delete: developer can't delete accounts (self or approving org deletions); owner deletes own account+org directly; employees delete own.
+  - Dev license create fixed (dynamic import unsupported in Convex → static import).
+- 2026-06: FIX Android crash 'FontSize should be a positive value' on role headers (AccountButton hidden <T fontSize:0> test markers → empty Views). iteration_5 passed.

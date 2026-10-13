@@ -10,6 +10,7 @@ import { useApi, useBottomChrome } from "@/src/hooks";
 import { offlineCollection, offlinePayment, offlineWarehouseReturn } from "@/src/offlineActions";
 import { useExchangeRate } from "@/src/pricing";
 import { InvoiceSheet, ReturnSheet } from "@/src/screens/Sales";
+import { Unit, UnitToggle, piecesOf, qtyLabel, unitName } from "@/src/components/UnitToggle";
 import { spacing, useTheme } from "@/src/theme";
 import { Badge, Btn, Card, Empty, Field, Header, IconBtn, Loading, Row, Segments, Select, Sheet, T, useToast } from "@/src/ui";
 
@@ -122,17 +123,17 @@ function WarehouseReturnSheet({ visible, onClose }: { visible: boolean; onClose:
   const toast = useToast();
   const { user } = useAuth();
   const inv = useApi<any[]>("/my/inventory", visible);
-  const [lines, setLines] = useState<{ item: any; qty: string }[]>([]);
+  const [lines, setLines] = useState<{ item: any; qty: string; unit: Unit }[]>([]);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const stock = (inv.data ?? []).filter((i) => i.quantity > 0 && !lines.some((l) => l.item.product_id === i.product_id));
   const submit = async () => {
     if (!lines.length) return toast("أضف صنفاً واحداً على الأقل", "error");
-    const bad = lines.find((l) => !(+l.qty > 0) || +l.qty > l.item.quantity);
+    const bad = lines.find((l) => !(+l.qty > 0) || piecesOf(l.item, l.unit, +l.qty) > l.item.quantity);
     if (bad) return toast(`كمية غير صحيحة: ${bad.item.product_name}`, "error");
     setSaving(true);
     try {
-      await offlineWarehouseReturn(lines.map((l) => ({ product_id: l.item.product_id, product_name: l.item.product_name, quantity: +l.qty })), notes, user?.name);
+      await offlineWarehouseReturn(lines.map((l) => ({ product_id: l.item.product_id, product_name: l.item.product_name, quantity: +l.qty, unit: l.unit, unit_label: unitName(l.item, l.unit), pieces: piecesOf(l.item, l.unit, +l.qty) })), notes, user?.name);
       toast("تم إرسال المرتجع بانتظار تأكيد المستودع");
       setLines([]); setNotes("");
       onClose();
@@ -143,13 +144,16 @@ function WarehouseReturnSheet({ visible, onClose }: { visible: boolean; onClose:
   return (
     <Sheet testID="wreturn-form-sheet" visible={visible} onClose={onClose} title="إرجاع بضاعة إلى المستودع" footer={<Btn testID="save-wreturn-button" title="إرسال المرتجع" icon="business-outline" loading={saving} onPress={submit} />}>
       <T v="caption">تُخصم الكميات من مخزونك الآن، وتُضاف إلى المستودع بعد تأكيد الإدارة للاستلام. عند الرفض تعود إليك.</T>
-      <Select testID="wreturn-product-select" label="إضافة صنف" placeholder={stock.length ? "اختر صنفاً من مخزونك" : "لا توجد أصناف أخرى"} value={null} options={stock} getLabel={(i: any) => i.product_name} getSub={(i: any) => `المتوفر: ${money(i.quantity)}`} onSelect={(i: any) => setLines([...lines, { item: i, qty: "" }])} />
+      <Select testID="wreturn-product-select" label="إضافة صنف" placeholder={stock.length ? "اختر صنفاً من مخزونك" : "لا توجد أصناف أخرى"} value={null} options={stock} getLabel={(i: any) => i.product_name} getSub={(i: any) => `المتوفر: ${money(i.quantity)} ${i.unit || "قطعة"}`} onSelect={(i: any) => setLines([...lines, { item: i, qty: "", unit: "PIECE" }])} />
       {lines.map((l, idx) => (
-        <View key={l.item.product_id} style={{ flexDirection: "row", alignItems: "flex-end", gap: spacing.sm }}>
-          <View style={{ flex: 1 }}>
-            <Field testID={`wreturn-qty-${l.item.product_id}`} label={`${l.item.product_name} (المتوفر ${money(l.item.quantity)})`} keyboardType="decimal-pad" value={l.qty} onChangeText={(v) => setLines(lines.map((x, i) => (i === idx ? { ...x, qty: v } : x)))} />
+        <View key={l.item.product_id} style={{ gap: spacing.sm }}>
+          <UnitToggle testID={`wreturn-unit-${l.item.product_id}`} product={l.item} value={l.unit} onChange={(u) => setLines(lines.map((x, i) => (i === idx ? { ...x, unit: u } : x)))} />
+          <View style={{ flexDirection: "row", alignItems: "flex-end", gap: spacing.sm }}>
+            <View style={{ flex: 1 }}>
+              <Field testID={`wreturn-qty-${l.item.product_id}`} label={`${l.item.product_name} · ${unitName(l.item, l.unit)} (المتوفر ${money(l.item.quantity)} ${unitName(l.item, "PIECE")})`} keyboardType="decimal-pad" value={l.qty} onChangeText={(v) => setLines(lines.map((x, i) => (i === idx ? { ...x, qty: v } : x)))} />
+            </View>
+            <IconBtn testID={`wreturn-remove-${l.item.product_id}`} icon="trash-outline" onPress={() => setLines(lines.filter((_, i) => i !== idx))} />
           </View>
-          <IconBtn testID={`wreturn-remove-${l.item.product_id}`} icon="trash-outline" onPress={() => setLines(lines.filter((_, i) => i !== idx))} />
         </View>
       ))}
       <Field testID="wreturn-notes-input" label="ملاحظات (سبب الإرجاع)" value={notes} onChangeText={setNotes} />
@@ -196,12 +200,12 @@ export default function DistributorOps() {
     }
     if (tab === "returns") {
       return (
-        <Row testID={`ops-returns-row-${item.id}`} icon="return-down-back-outline" title={`${item.return_no} · ${item.customer_name}`} subtitle={`${item.items.map((i: any) => `${i.product_name} ×${money(i.quantity)}`).join("، ")} · ${fmtDate(item.created_at)}`} onPress={() => setDoc(item)} right={<T v="label">{money(item.total)}</T>} />
+        <Row testID={`ops-returns-row-${item.id}`} icon="return-down-back-outline" title={`${item.return_no} · ${item.customer_name}`} subtitle={`${item.items.map((i: any) => `${i.product_name} ×${qtyLabel(i)}`).join("، ")} · ${fmtDate(item.created_at)}`} onPress={() => setDoc(item)} right={<T v="label">{money(item.total)}</T>} />
       );
     }
     const st = wreturnStatus(item.status);
     return (
-      <Row testID={`ops-wreturns-row-${item.id}`} icon="business-outline" title={item.return_no} subtitle={`${item.items.map((i: any) => `${i.product_name} ×${money(i.quantity)}`).join("، ")} · ${fmtDate(item.created_at)}`} onPress={() => setVoucher({ kind: "wreturn", doc: item })} right={<Badge text={item.pending ? "غير متزامن" : st.text} tone={item.pending ? "warning" : st.tone} />} />
+      <Row testID={`ops-wreturns-row-${item.id}`} icon="business-outline" title={item.return_no} subtitle={`${item.items.map((i: any) => `${i.product_name} ×${qtyLabel(i)}`).join("، ")} · ${fmtDate(item.created_at)}`} onPress={() => setVoucher({ kind: "wreturn", doc: item })} right={<Badge text={item.pending ? "غير متزامن" : st.text} tone={item.pending ? "warning" : st.tone} />} />
     );
   };
 

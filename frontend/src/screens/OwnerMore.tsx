@@ -18,6 +18,7 @@ import { ProUpsell } from "@/src/components/ProUpsell";
 import { RoutePlanner } from "@/src/components/RoutePlanner";
 import { OwnerStockRequests } from "@/src/components/StockRequests";
 import { OwnerWarehouseReturns } from "@/src/components/WarehouseReturns";
+import { Unit, UnitToggle, piecesOf, qtyLabel, unitName } from "@/src/components/UnitToggle";
 import { useApi, useBottomChrome, useMutate } from "@/src/hooks";
 import { ProLock } from "@/src/components/ProLock";
 import { spacing, useTheme } from "@/src/theme";
@@ -86,24 +87,29 @@ function DeliverySheet({ visible, onClose, agents }: { visible: boolean; onClose
   const toast = useToast();
   const products = useApi<any[]>("/products", visible);
   const [agent, setAgent] = useState<any>(null);
-  const [lines, setLines] = useState<{ product: any; qty: string }[]>([]);
+  const [lines, setLines] = useState<{ product: any; qty: string; unit: Unit }[]>([]);
   const m = useMutate("POST", "/deliveries", "تم تسليم البضاعة للموزع", () => { setLines([]); setAgent(null); onClose(); });
   const submit = () => {
     if (!agent || !lines.length || lines.some((l) => !(+l.qty > 0))) return toast("اختر الموزع وأدخل الكميات", "error");
-    m.mutate({ distributor_id: agent.user_id, items: lines.map((l) => ({ product_id: l.product.id, quantity: +l.qty })) });
+    const over = lines.find((l) => piecesOf(l.product, l.unit, +l.qty) > (l.product.stock ?? 0));
+    if (over) return toast(`الكمية غير متوفرة في المستودع: ${over.product.name}`, "error");
+    m.mutate({ distributor_id: agent.user_id, items: lines.map((l) => ({ product_id: l.product.id, quantity: +l.qty, unit: l.unit })) });
   };
   return (
     <Sheet testID="delivery-sheet" visible={visible} onClose={onClose} title="تسليم بضاعة لموزع" footer={<Btn testID="save-delivery-button" title="تأكيد التسليم" icon="car-outline" onPress={submit} loading={m.isPending} />}>
       <Select testID="delivery-agent-select" label="الموزع" placeholder="اختر الموزع" value={agent?.name ?? null} options={agents} getLabel={(a: any) => a.name ?? a.email} onSelect={setAgent} />
       {lines.map((l, i) => (
-        <View key={l.product.id} style={{ flexDirection: "row", alignItems: "flex-end", gap: spacing.sm }}>
-          <View style={{ flex: 1 }}>
-            <Field testID={`delivery-qty-input-${i}`} label={`${l.product.name} (المستودع: ${l.product.stock})`} keyboardType="decimal-pad" value={l.qty} onChangeText={(v) => setLines(lines.map((x, j) => (j === i ? { ...x, qty: v } : x)))} />
+        <View key={l.product.id} style={{ gap: spacing.sm }}>
+          <UnitToggle testID={`delivery-unit-${i}`} product={l.product} value={l.unit} onChange={(u) => setLines(lines.map((x, j) => (j === i ? { ...x, unit: u } : x)))} />
+          <View style={{ flexDirection: "row", alignItems: "flex-end", gap: spacing.sm }}>
+            <View style={{ flex: 1 }}>
+              <Field testID={`delivery-qty-input-${i}`} label={`${l.product.name} · ${unitName(l.product, l.unit)} (المستودع: ${l.product.stock} ${unitName(l.product, "PIECE")})`} keyboardType="decimal-pad" value={l.qty} onChangeText={(v) => setLines(lines.map((x, j) => (j === i ? { ...x, qty: v } : x)))} />
+            </View>
+            <IconBtn testID={`delivery-remove-${i}`} icon="trash-outline" onPress={() => setLines(lines.filter((_, j) => j !== i))} />
           </View>
-          <IconBtn testID={`delivery-remove-${i}`} icon="trash-outline" onPress={() => setLines(lines.filter((_, j) => j !== i))} />
         </View>
       ))}
-      <Select testID="delivery-product-select" label="إضافة منتج" placeholder="+ اختر منتجاً" value={null} options={(products.data ?? []).filter((p) => p.stock > 0 && !lines.find((l) => l.product.id === p.id))} getLabel={(p: any) => p.name} getSub={(p: any) => `المستودع: ${p.stock}`} onSelect={(p) => setLines([...lines, { product: p, qty: "" }])} />
+      <Select testID="delivery-product-select" label="إضافة منتج" placeholder="+ اختر منتجاً" value={null} options={(products.data ?? []).filter((p) => p.stock > 0 && !lines.find((l) => l.product.id === p.id))} getLabel={(p: any) => p.name} getSub={(p: any) => `المستودع: ${p.stock}`} onSelect={(p) => setLines([...lines, { product: p, qty: "", unit: "PIECE" }])} />
     </Sheet>
   );
 }
@@ -191,7 +197,7 @@ export default function OwnerMore() {
             <Section title="سجل التسليمات">
               <Card style={{ padding: 0, overflow: "hidden" }}>
                 {!deliveries.data?.length ? <Empty icon="car-outline" text="لا توجد تسليمات" /> : deliveries.data.map((d) => (
-                  <Row key={d.id} testID={`delivery-row-${d.id}`} icon="car-outline" title={d.distributor_name ?? "موزع"} subtitle={`${d.items.map((x: any) => `${x.product_name} ×${x.quantity}`).join("، ")} · ${fmtDate(d.created_at)}`} right={<Badge text={`${d.items.length} صنف`} />} />
+                  <Row key={d.id} testID={`delivery-row-${d.id}`} icon="car-outline" title={d.distributor_name ?? "موزع"} subtitle={`${d.items.map((x: any) => `${x.product_name} ×${qtyLabel(x)}`).join("، ")} · ${fmtDate(d.created_at)}`} right={<Badge text={`${d.items.length} صنف`} />} />
                 ))}
               </Card>
             </Section>

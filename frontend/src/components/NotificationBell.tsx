@@ -1,4 +1,6 @@
-import { useMutation, useQuery } from "convex/react";
+import { useMutation } from "convex/react";
+
+import { useApi } from "@/src/hooks";
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 
@@ -28,7 +30,7 @@ export function NotificationBell() {
   const { colors } = useTheme();
   const { token } = useAuth();
   const [open, setOpen] = useState(false);
-  const q = useQuery(cxApi.notifications.list, token ? { token } : "skip");
+  const q = useApi<any>("/notifications", !!token, 30000).data; // REST: a failed query must never crash the screen
   const readAll = useMutation(cxApi.notifications.readAll);
   const unread = q?.unread ?? 0;
   const items = q?.items ?? [];

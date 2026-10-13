@@ -2,6 +2,10 @@ import { v } from "convex/values";
 
 import { mutation, query } from "./_generated/server";
 import {
+  linePieces,
+  unitQty,
+  orgMoney,
+  toBase,
   AGENT,
   ANY_ORG,
   OWNER,
@@ -24,8 +28,8 @@ import {
   round2,
 } from "./lib";
 
-const lineItem = v.object({ product_id: v.string(), quantity: v.number(), price: v.optional(v.number()) });
-const qtyItem = v.object({ product_id: v.string(), quantity: v.number() });
+const lineItem = v.object({ product_id: v.string(), quantity: v.number(), price: v.optional(v.number()), unit: v.optional(v.string()) });
+const qtyItem = v.object({ product_id: v.string(), quantity: v.number(), unit: v.optional(v.string()) });
 
 async function scopedList(ctx: any, token: string, table: string) {
   const user = await require(ctx, token, ANY_ORG);
@@ -66,15 +70,18 @@ export const createSales = mutation({
     }
     const items: any[] = [];
     let total = 0;
+    const { rate } = await orgMoney(ctx, user.org_id!);
     for (const it of a.items) {
-      const prod = await docOrgUnique(ctx, "products", it.product_id, user.org_id!);
+      const prod: any = await docOrgUnique(ctx, "products", it.product_id, user.org_id!);
       if (!prod) throw new Error("المنتج غير موجود");
-      const price = await priceFor(ctx, user.org_id!, cust, prod.id);
+      const u = unitQty(prod, it.unit, it.quantity);
+      const piece = toBase(await priceFor(ctx, user.org_id!, cust, prod.id), prod.price_currency === "USD" ? "USD" : "SYP", rate);
+      const price = u.unit === "PACKAGE" ? round2(piece * u.pieces_per_package) : piece; // per returned unit, SYP
       const line = round2(it.quantity * price);
       total += line;
-      items.push({ product_id: prod.id, product_name: prod.name, quantity: it.quantity, price, total: line });
-      await invAdjust(ctx, user.org_id!, user.user_id, prod.id, prod.name, it.quantity);
-      await logMovement(ctx, user.org_id!, prod.id, prod.name, "RETURN", it.quantity, user.name ?? null, "AGENT");
+      items.push({ product_id: prod.id, product_name: prod.name, ...u, price, unit_price: price, total: line });
+      await invAdjust(ctx, user.org_id!, user.user_id, prod.id, prod.name, u.pieces);
+      await logMovement(ctx, user.org_id!, prod.id, prod.name, "RETURN", u.pieces, user.name ?? null, "AGENT");
     }
     total = round2(total);
     await ctx.db.patch(cust._id, { balance: round2((cust.balance ?? 0) - total) });
@@ -115,12 +122,14 @@ export const createWarehouse = mutation({
     const items: any[] = [];
     for (const it of a.items) {
       const inv = await distInv(ctx, user.user_id, it.product_id);
-      if (!inv || (inv.quantity ?? 0) < it.quantity) throw new Error(`الكمية غير متوفرة لديك: ${inv?.product_name ?? ""}`);
-      items.push({ product_id: it.product_id, product_name: inv.product_name, quantity: it.quantity });
+      const prod = await docOrgUnique(ctx, "products", it.product_id, user.org_id!);
+      const u = unitQty(prod, it.unit, it.quantity);
+      if (!inv || (inv.quantity ?? 0) < u.pieces - 0.0001) throw new Error(`الكمية غير متوفرة لديك: ${inv?.product_name ?? ""}`);
+      items.push({ product_id: it.product_id, product_name: inv.product_name, ...u });
     }
     for (const it of items) {
-      await invAdjust(ctx, user.org_id!, user.user_id, it.product_id, it.product_name, -it.quantity);
-      await logMovement(ctx, user.org_id!, it.product_id, it.product_name, "DIST_RETURN_OUT", -it.quantity, user.name ?? null, "AGENT");
+      await invAdjust(ctx, user.org_id!, user.user_id, it.product_id, it.product_name, -it.pieces);
+      await logMovement(ctx, user.org_id!, it.product_id, it.product_name, "DIST_RETURN_OUT", -it.pieces, user.name ?? null, "AGENT");
     }
     const doc = {
       id: a.id || newId(),
@@ -152,8 +161,8 @@ export const acceptWarehouse = mutation({
     const r = await pendingWReturn(ctx, id, user.org_id!);
     for (const it of r.items) {
       const prod = await docOrgUnique(ctx, "products", it.product_id, user.org_id!);
-      if (prod) await ctx.db.patch(prod._id, { stock: round2((prod.stock ?? 0) + it.quantity) });
-      await logMovement(ctx, user.org_id!, it.product_id, it.product_name, "DIST_RETURN", it.quantity, user.name ?? null, "WAREHOUSE");
+      if (prod) await ctx.db.patch(prod._id, { stock: round2((prod.stock ?? 0) + linePieces(it)) });
+      await logMovement(ctx, user.org_id!, it.product_id, it.product_name, "DIST_RETURN", linePieces(it), user.name ?? null, "WAREHOUSE");
     }
     await ctx.db.patch(r._id, { status: "ACCEPTED", handled_at: nowIso(), handled_by: user.name ?? null });
     await notify(ctx, [r.distributor_id], "warehouse_return_accepted", "تم استلام المرتجع", `تم استلام المرتجع ${r.return_no} في المستودع`);
@@ -167,8 +176,8 @@ export const rejectWarehouse = mutation({
     const user = await require(ctx, token, OWNER);
     const r = await pendingWReturn(ctx, id, user.org_id!);
     for (const it of r.items) {
-      await invAdjust(ctx, user.org_id!, r.distributor_id, it.product_id, it.product_name, it.quantity);
-      await logMovement(ctx, user.org_id!, it.product_id, it.product_name, "DIST_RETURN_REJECTED", it.quantity, user.name ?? null, "AGENT");
+      await invAdjust(ctx, user.org_id!, r.distributor_id, it.product_id, it.product_name, linePieces(it));
+      await logMovement(ctx, user.org_id!, it.product_id, it.product_name, "DIST_RETURN_REJECTED", linePieces(it), user.name ?? null, "AGENT");
     }
     await ctx.db.patch(r._id, { status: "REJECTED", reject_reason: reason ?? "", handled_at: nowIso(), handled_by: user.name ?? null });
     await notify(ctx, [r.distributor_id], "warehouse_return_rejected", "تم رفض المرتجع", `رُفض المرتجع ${r.return_no} وأعيدت الكميات إلى مخزونك${reason ? " · " + reason : ""}`);

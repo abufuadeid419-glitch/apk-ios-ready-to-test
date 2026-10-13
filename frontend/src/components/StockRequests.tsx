@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { qtyLabel } from "@/src/components/UnitToggle";
 import { View } from "react-native";
 
 import { fmtDate, money } from "@/src/api";
@@ -69,7 +70,7 @@ export function AgentStock() {
         <Section title="طلبات التعبئة">
           <Card style={{ padding: 0, overflow: "hidden" }}>
             {reqs.data.slice(0, 5).map((r) => (
-              <Row key={r.id} testID={`my-stock-request-${r.id}`} icon="file-tray-full-outline" title={r.items.map((x: any) => `${x.product_name} ×${x.quantity}`).join("، ")} subtitle={fmtDate(r.created_at)} right={<Badge text={r.pending ? "بانتظار المزامنة" : statusBadge[r.status].t} tone={r.pending ? "warning" : statusBadge[r.status].tone} />} />
+              <Row key={r.id} testID={`my-stock-request-${r.id}`} icon="file-tray-full-outline" title={r.items.map((x: any) => `${x.product_name} ×${qtyLabel(x)}`).join("، ")} subtitle={fmtDate(r.created_at)} right={<Badge text={r.pending ? "بانتظار المزامنة" : statusBadge[r.status].t} tone={r.pending ? "warning" : statusBadge[r.status].tone} />} />
             ))}
           </Card>
         </Section>
@@ -92,7 +93,7 @@ export function OwnerStockRequests() {
           <T v="label">{r.distributor_name}</T>
           <T v="caption">{fmtDate(r.created_at)}</T>
           {r.items.map((x: any) => (
-            <T key={x.product_id}>• {x.product_name} × {money(x.quantity)}</T>
+            <T key={x.product_id}>• {x.product_name} × {qtyLabel(x)}</T>
           ))}
           <View style={{ flexDirection: "row", gap: spacing.sm }}>
             <Btn testID={`fulfill-request-${r.id}`} small style={{ flex: 1 }} icon="car-outline" title="تسليم الآن" loading={fulfill.isPending} onPress={() => fulfill.mutate(r)} />

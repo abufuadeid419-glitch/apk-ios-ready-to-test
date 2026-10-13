@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { qtyLabel } from "@/src/components/UnitToggle";
 import { View } from "react-native";
 
 import { fmtDate, money } from "@/src/api";
@@ -33,7 +34,7 @@ export function OwnerWarehouseReturns() {
             <Card key={r.id} testID={`wreturn-pending-${r.id}`} style={{ gap: spacing.sm }}>
               <T v="label">{r.return_no} · {r.distributor_name}</T>
               <T v="caption">{fmtDate(r.created_at)}{r.notes ? ` · ${r.notes}` : ""}</T>
-              {r.items.map((it: any, i: number) => <T key={i}>• {it.product_name} × {money(it.quantity)}</T>)}
+              {r.items.map((it: any, i: number) => <T key={i}>• {it.product_name} × {qtyLabel(it)}</T>)}
               <View style={{ flexDirection: "row", gap: spacing.sm }}>
                 <Btn testID={`wreturn-accept-${r.id}`} style={{ flex: 1 }} small title="تأكيد الاستلام" icon="checkmark-circle-outline" loading={accept.isPending} onPress={() => accept.mutate(r)} />
                 <Btn testID={`wreturn-reject-${r.id}`} style={{ flex: 1 }} small variant="danger" title="رفض" icon="close-circle-outline" onPress={() => setRejecting(r)} />

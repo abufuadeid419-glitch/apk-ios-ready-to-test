@@ -1,0 +1,24 @@
+{
+  "summary": "Verified fix for Android 'FontSize should be a positive value' crash (iteration 5, frontend only). Static grep across src/ and app/ confirms no fontSize:0 or dynamic path that can yield 0 (all variants in src/ui.tsx sizes map and ReceiptView TEXT map are positive constants). AccountButton.tsx now renders invisible test markers as zero-sized <View> instead of <T style={fontSize:0}> — comment on line 85 documents the Android caveat. Web regression: distributor (test_token_agent) loads /dist with 5 tabs (tab-index, tab-sale, tab-sales, tab-customers, tab-ops), header renders with testIDs account-button, account-initials, account-name-chip, account-role-chip all present; account sheet opens and shows 'موزع الاختبار'. Owner, Accountant, and Developer dashboards also render the header, open the account sheet correctly, and emit 0 JS console errors. Note: the actual Android IllegalArgumentException is native-only and cannot be reproduced on web preview; the Hermes/Android render pipeline that threw it is bypassed on RN-web (no font metrics on size 0 Text). Static code audit + web regression are the strongest signals available in this environment and they both pass.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_5.json"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Fix pattern is correct: replaced <T style={{fontSize:0}}> with zero-sized <View> for test markers. The inline comment on AccountButton.tsx:85 ('never use fontSize 0 — Android crashes') is good defensive documentation.",
+    "No other occurrences of fontSize:0 in codebase. All fontSize values in src/ui.tsx, src/components/*, app/* are positive literals (10–26) or come from positive constant maps.",
+    "Minor nit (not a bug): the two testID markers account-name-chip and account-role-chip are rendered differently depending on pending.length (nested chip vs sibling zero-sized Views). Tests should not rely on their geometry, only existence — which is how automation uses them."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend-only)", "frontend": "100%"},
+  "seed_data_creation": "None — used existing seeded test tokens (test_token_agent/owner/acct/dev) via localStorage session_token.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Fix for Android fontSize:0 crash in AccountButton.tsx is verified on web for all 4 roles. The native Android crash itself can only be re-verified with a native build / EAS build; web preview cannot exercise the RN Android text layout path that threw. If a new render crash is reported on Android, grep for any dynamic fontSize expression that could evaluate to 0 or negative (e.g., scale factors on empty data, numberOfLines-driven adjustsFontSizeToFit, user-provided font sizes).",
+  "rca_of_issue": "Root cause: AccountButton.tsx previously rendered two invisible <T style={{fontSize:0}}> markers (account-name-chip, account-role-chip) solely for e2e testIDs. On Android, React Native's Hermes-backed text shadow node validates fontSize>0 and throws java.lang.IllegalArgumentException('FontSize should be a positive value. Current value: 0') when the distributor header mounts (header renders on every tab). Web/RN-web does not perform this validation, which is why iterations 1–4 passed. Mitigation: replace the invisible Text with zero-sized <View> components that carry the same testID — Views have no font metrics, so Android layout is a no-op. Verified via static grep (no remaining fontSize:0 anywhere) and web regression across all 4 roles with 0 console errors."
+}

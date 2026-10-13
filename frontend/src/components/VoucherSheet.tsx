@@ -1,4 +1,5 @@
 import { fmtDate, money } from "@/src/api";
+import { qtyLabel } from "@/src/components/UnitToggle";
 import { DocActions } from "@/src/components/DocActions";
 import { useApi } from "@/src/hooks";
 import { collectionReceipt, paymentReceipt, warehouseReturnReceipt } from "@/src/receipts";
@@ -30,7 +31,7 @@ export function VoucherSheet({ kind, doc, onClose }: { kind: VoucherKind; doc: a
         : warehouseReturnReceipt(doc, o, logo.data?.data_uri ?? null);
   const waText = () =>
     kind === "wreturn"
-      ? [`*${o?.name ?? ""}*`, `إذن إرجاع للمستودع: ${no}`, `التاريخ: ${fmtDate(doc.created_at)}`, ...doc.items.map((i: any) => `• ${i.product_name} × ${money(i.quantity)}`)].join("\n")
+      ? [`*${o?.name ?? ""}*`, `إذن إرجاع للمستودع: ${no}`, `التاريخ: ${fmtDate(doc.created_at)}`, ...doc.items.map((i: any) => `• ${i.product_name} × ${qtyLabel(i)}`)].join("\n")
       : [
           `*${o?.name ?? ""}*`,
           `${kind === "collection" ? "سند قبض" : "سند صرف"} رقم: ${no}`,
@@ -52,7 +53,7 @@ export function VoucherSheet({ kind, doc, onClose }: { kind: VoucherKind; doc: a
                 <T v="h2">إرجاع إلى المستودع</T>
                 <T v="caption">{doc.distributor_name} · {fmtDate(doc.created_at)}</T>
                 <Badge testID="voucher-status-badge" text={wreturnStatus(doc.status).text} tone={wreturnStatus(doc.status).tone} />
-                {doc.items.map((it: any, i: number) => <T key={i}>{it.product_name} × {money(it.quantity)}</T>)}
+                {doc.items.map((it: any, i: number) => <T key={i}>{it.product_name} × {qtyLabel(it)}</T>)}
                 {!!doc.reject_reason && <T v="caption" color="error">سبب الرفض: {doc.reject_reason}</T>}
               </>
             ) : (

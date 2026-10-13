@@ -1,4 +1,6 @@
-import { useMutation, useQuery } from "convex/react";
+import { useMutation } from "convex/react";
+
+import { useApi } from "@/src/hooks";
 import { useState } from "react";
 import { View } from "react-native";
 
@@ -24,7 +26,8 @@ export function SalesTargetsCard() {
   const { token, user } = useAuth();
   const toast = useToast();
   const isOwner = user?.role === "OWNER";
-  const q = useQuery(cxApi.targets.list, token ? { token } : "skip");
+  const tq = useApi<any>("/targets", !!token, 60000);
+  const q = tq.data; // REST: a failed query must never crash the screen
   const setTarget = useMutation(cxApi.targets.set);
   const [edit, setEdit] = useState<any>(null);
   const [amount, setAmount] = useState("");
@@ -37,6 +40,7 @@ export function SalesTargetsCard() {
     setBusy(true);
     try {
       await setTarget({ token, distributor_id: edit.user_id, month: q?.month, amount: n });
+      tq.refetch();
       toast(n === 0 ? "تم حذف الهدف" : "تم حفظ الهدف");
       setEdit(null);
     } catch (e: any) {
@@ -89,7 +93,8 @@ export function SalesTargetsCard() {
 // Field agent: own target with pace guidance.
 export function MyTargetCard() {
   const { token } = useAuth();
-  const q = useQuery(cxApi.targets.list, token ? { token } : "skip");
+  const tq = useApi<any>("/targets", !!token, 60000);
+  const q = tq.data; // REST: a failed query must never crash the screen
   const me = q?.agents?.[0];
   if (!me?.target) return null;
   const done = (me.pct ?? 0) >= 100;

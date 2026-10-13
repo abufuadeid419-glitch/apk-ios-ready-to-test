@@ -1,5 +1,6 @@
 import { View } from "react-native";
 
+import { qtyLabel } from "@/src/components/UnitToggle";
 import { fmtDate, money } from "@/src/api";
 import { useApi } from "@/src/hooks";
 import { offlineDeliveryAction } from "@/src/offlineActions";
@@ -23,7 +24,7 @@ export function PendingDeliveries() {
         <Card key={d.id} testID={`pending-delivery-${d.id}`} style={{ gap: spacing.sm, borderColor: colors.warning }}>
           <T v="caption">{fmtDate(d.created_at)}{d.notes ? ` · ${d.notes}` : ""}</T>
           {d.items.map((it: any) => (
-            <T key={it.product_id}>• {it.product_name} × {money(it.quantity)}</T>
+            <T key={it.product_id}>• {it.product_name} × {qtyLabel(it)}</T>
           ))}
           <View style={{ flexDirection: "row", gap: spacing.sm }}>
             <Btn testID={`confirm-delivery-${d.id}`} small style={{ flex: 1 }} icon="checkmark-done" title="تأكيد الاستلام" onPress={() => act(d, "confirm")} />

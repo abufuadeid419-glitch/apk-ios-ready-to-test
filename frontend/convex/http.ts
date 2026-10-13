@@ -115,6 +115,7 @@ const ROUTES: Route[] = [
   ["GET", "/org/profile", "q", api.extra.orgProfile, T],
   ["PUT", "/org/profile", "m", api.extra.orgProfileUpdate, spread],
   ["PUT", "/org/currency", "m", api.extra.orgCurrency, spread],
+  ["PUT", "/org/pricing-method", "m", api.extra.orgPricingMethod, spread],
   ["GET", "/org/debt-sms", "q", api.proFeatures.debtSettings, T],
   ["PUT", "/org/debt-sms", "m", api.proFeatures.setDebtSettings, (c) => ({ token: c.token, enabled: !!c.b.enabled, days: Number(c.b.days) || 14 })],
   ["GET", "/org/daily-sms", "q", api.dailySms.preview, T],

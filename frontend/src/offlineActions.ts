@@ -11,8 +11,8 @@ const geo = () => {
   return { lat: c?.lat ?? null, lng: c?.lng ?? null, client_created_at: new Date().toISOString() };
 };
 
-type Line = { product_id: string; product_name: string; quantity: number; price: number };
-type SaleLine = Line & { unit?: "PIECE" | "PACKAGE"; pieces?: number };
+type Line = { product_id: string; product_name: string; quantity: number; price: number; unit?: "PIECE" | "PACKAGE"; unit_label?: string; pieces?: number };
+type SaleLine = Line;
 
 export async function offlineSale(p: { customer: any; lines: SaleLine[]; paid: number | null; notes: string; userName?: string; discountType?: "NONE" | "PERCENT" | "FIXED"; discountValue?: number }) {
   const id = uid();
@@ -57,12 +57,13 @@ export async function offlineCollection(p: { customer: any; amount: number; note
 export async function offlineReturn(p: { customer: any; line: Line; reason: string; userName?: string }) {
   const id = uid();
   const total = r2(p.line.quantity * p.line.price);
-  const body = { id, customer_id: p.customer.id, items: [{ product_id: p.line.product_id, quantity: p.line.quantity, price: p.line.price }], reason: p.reason, ...geo() };
+  const pieces = p.line.pieces ?? p.line.quantity;
+  const body = { id, customer_id: p.customer.id, items: [{ product_id: p.line.product_id, quantity: p.line.quantity, price: p.line.price, unit: p.line.unit ?? "PIECE" }], reason: p.reason, ...geo() };
   const doc = { id, pending: true, return_no: tempNo("RET", id), customer_id: p.customer.id, customer_name: p.customer.name, distributor_name: p.userName, items: [{ ...p.line, total }], total, reason: p.reason, created_at: new Date().toISOString() };
   await updateCached<any[]>("/my/inventory", (inv) => {
     const found = inv.find((i) => i.product_id === p.line.product_id);
-    if (found) return inv.map((i) => (i.product_id === p.line.product_id ? { ...i, quantity: r2(i.quantity + p.line.quantity) } : i));
-    return [...inv, { product_id: p.line.product_id, product_name: p.line.product_name, quantity: p.line.quantity, sale_price: p.line.price }];
+    if (found) return inv.map((i) => (i.product_id === p.line.product_id ? { ...i, quantity: r2(i.quantity + pieces) } : i));
+    return [...inv, { product_id: p.line.product_id, product_name: p.line.product_name, quantity: pieces, sale_price: p.line.price }];
   });
   await updateCached<any[]>("/customers", (cs) => cs.map((c) => (c.id === p.customer.id ? { ...c, balance: r2(c.balance - total) } : c)));
   await updateCached<any[]>("/sales-returns", (s) => [doc, ...s]);
@@ -91,18 +92,21 @@ export async function offlinePayment(p: { customer: any; amount: number; notes: 
   return doc;
 }
 
+type QtyLine = { product_id: string; product_name: string; quantity: number; unit?: "PIECE" | "PACKAGE"; unit_label?: string; pieces?: number };
+const pcs = (l: QtyLine) => l.pieces ?? l.quantity;
+
 // Distributor stock returned to the main warehouse (owner confirms receipt).
-export async function offlineWarehouseReturn(items: { product_id: string; product_name: string; quantity: number }[], notes: string, userName?: string) {
+export async function offlineWarehouseReturn(items: QtyLine[], notes: string, userName?: string) {
   const id = uid();
   const doc = { id, pending: true, return_no: tempNo("WRT", id), items, notes, status: "PENDING", distributor_name: userName, created_at: new Date().toISOString() };
   await updateCached<any[]>("/my/inventory", (inv) =>
     inv.map((i) => {
       const l = items.find((x) => x.product_id === i.product_id);
-      return l ? { ...i, quantity: r2(i.quantity - l.quantity) } : i;
+      return l ? { ...i, quantity: r2(i.quantity - pcs(l)) } : i;
     }),
   );
   await updateCached<any[]>("/warehouse-returns", (s) => [doc, ...s]);
-  await enqueue({ id, path: "/warehouse-returns", body: { id, items: items.map(({ product_id, quantity }) => ({ product_id, quantity })), notes }, label: `إرجاع للمستودع · ${items.length} صنف` });
+  await enqueue({ id, path: "/warehouse-returns", body: { id, items: items.map(({ product_id, quantity, unit }) => ({ product_id, quantity, unit: unit ?? "PIECE" })), notes }, label: `إرجاع للمستودع · ${items.length} صنف` });
   return doc;
 }
 
@@ -130,7 +134,7 @@ export async function offlineDeliveryAction(d: any, action: "confirm" | "reject"
       let next = [...inv];
       for (const it of d.items) {
         const f = next.find((i) => i.product_id === it.product_id);
-        next = f ? next.map((i) => (i.product_id === it.product_id ? { ...i, quantity: r2(i.quantity + it.quantity) } : i)) : [...next, { product_id: it.product_id, product_name: it.product_name, quantity: it.quantity, sale_price: 0, min_stock: 0 }];
+        next = f ? next.map((i) => (i.product_id === it.product_id ? { ...i, quantity: r2(i.quantity + pcs(it)) } : i)) : [...next, { product_id: it.product_id, product_name: it.product_name, quantity: pcs(it), sale_price: 0, min_stock: 0 }];
       }
       return next;
     });

@@ -2,6 +2,7 @@ import { v } from "convex/values";
 
 import { mutation, query } from "./_generated/server";
 import {
+  consumeFifo,
   AGENT,
   ANY_ORG,
   clean,
@@ -114,6 +115,7 @@ export const create = mutation({
     for (const it of items) {
       const inv = await distInv(ctx, user.user_id, it.product_id);
       if (inv) await ctx.db.patch(inv._id, { quantity: round2((inv.quantity ?? 0) - it.pieces) });
+      await consumeFifo(ctx, user.org_id!, it.product_id, it.pieces, user.name ?? null);
       await logMovement(ctx, user.org_id!, it.product_id, it.product_name, "SALE", -it.pieces, user.name ?? null, "AGENT");
     }
 
