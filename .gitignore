@@ -83,3 +83,9 @@ android-sdk/
 # Distributor role routes (must be tracked)
 !frontend/app/dist/
 !frontend/app/dist/**
+.env
+.env.*
+*.env
+credentials.json
+*.key
+.credentials

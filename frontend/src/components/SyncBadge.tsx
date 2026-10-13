@@ -4,32 +4,27 @@ import { Pressable, View } from "react-native";
 import { convex } from "@/src/convex";
 import { useSyncState } from "@/src/offline";
 import { radius, spacing, useTheme } from "@/src/theme";
-import { T, useToast } from "@/src/ui";
+import { SyncReportSheet } from "@/src/components/SyncReport";
+import { T } from "@/src/ui";
 
 // Small live indicator: cloud connection + offline queue state.
 // Shown on the dark header as a compact deep-navy pill with status dot.
 export function SyncBadge() {
   const { colors } = useTheme();
-  const toast = useToast();
   const { pending, online, syncing } = useSyncState();
+  const [open, setOpen] = useState(false);
   const [cx, setCx] = useState(() => convex.connectionState().isWebSocketConnected);
 
   useEffect(() => convex.subscribeToConnectionState((s) => setCx(s.isWebSocketConnected)), []);
 
   const state = !online || !cx ? "offline" : syncing || pending.length ? "syncing" : "synced";
   const color = state === "offline" ? colors.error : state === "syncing" ? colors.warning : colors.success;
-  const info =
-    state === "offline"
-      ? "لا يوجد اتصال بالسحابة. ستُحفظ عملياتك وتُرسل تلقائياً عند عودة الاتصال."
-      : state === "syncing"
-        ? `جارٍ رفع ${pending.length} عملية إلى السحابة...`
-        : "كل بياناتك محفوظة ومتزامنة مع السحابة.";
-
   return (
+    <>
     <Pressable
       testID="sync-status-badge"
       accessibilityLabel={state}
-      onPress={() => toast(info, state === "offline" ? "error" : undefined)}
+      onPress={() => setOpen(true)}
       hitSlop={6}
       style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1, width: 36, height: 36, borderRadius: radius.md, backgroundColor: colors.headerDeep, alignItems: "center", justifyContent: "center" })}
     >
@@ -40,5 +35,7 @@ export function SyncBadge() {
         </View>
       )}
     </Pressable>
+    <SyncReportSheet visible={open} onClose={() => setOpen(false)} />
+    </>
   );
 }

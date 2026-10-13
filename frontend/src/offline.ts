@@ -41,6 +41,11 @@ export type QItem = {
 const Q_KEY = "offline_queue";
 const F_KEY = "offline_failed";
 const IDX_KEY = "offline_cache_index";
+const H_KEY = "offline_synced_history";
+const HISTORY_MAX = 200;
+
+// Successfully synced items (newest first) — powers the distributor's sync report.
+export type SyncedItem = { id: string; label: string; path: string; created_at: string; synced_at: string };
 
 // Bounded concurrency: send up to N requests in parallel across different
 // endpoints. Same-endpoint writes still run strictly serially so dependent
@@ -53,6 +58,8 @@ const BACKOFF_CAP_MS = 30000;
 
 let queue: QItem[] = [];
 let failed: QItem[] = [];
+let history: SyncedItem[] = [];
+let lastSyncAt: string | null = null;
 let loaded: Promise<void> | null = null;
 let syncing = false;
 let online = true;
@@ -81,6 +88,7 @@ function load() {
     loaded = (async () => {
       queue = parse(await storage.getItem(Q_KEY, null), []);
       failed = parse(await storage.getItem(F_KEY, null), []);
+      history = parse(await storage.getItem(H_KEY, null), []);
       notify();
     })();
   }
@@ -168,7 +176,15 @@ export async function clearOffline() {
   await storage.removeItem(IDX_KEY);
   queue = [];
   failed = [];
+  history = [];
+  await storage.removeItem(H_KEY);
   await save();
+}
+
+export async function clearSyncHistory() {
+  history = [];
+  await storage.removeItem(H_KEY);
+  notify();
 }
 
 // ---------------- Queue ----------------
@@ -230,6 +246,7 @@ async function sendOne(it: QItem) {
     await api(it.path, { method: "POST", body: it.body });
     // success
     queue = queue.filter((q) => q.id !== it.id);
+    history = [{ id: it.id, label: it.label, path: it.path, created_at: it.created_at, synced_at: new Date().toISOString() }, ...history.filter((h) => h.id !== it.id)].slice(0, HISTORY_MAX);
     online = true;
     return "ok" as const;
   } catch (e: any) {
@@ -326,6 +343,10 @@ export async function syncQueue() {
       if (hitOffline) break;
     }
     await save();
+    if (syncedCount > 0) {
+      lastSyncAt = new Date().toISOString();
+      await storage.setItem(H_KEY, JSON.stringify(history));
+    }
   } finally {
     syncing = false;
     progress = { done: 0, total: 0 };
@@ -390,5 +411,5 @@ export function useSyncState() {
       listeners.delete(f);
     };
   }, []);
-  return { pending: queue, failed, online, syncing, progress };
+  return { pending: queue, failed, history, lastSyncAt, online, syncing, progress };
 }

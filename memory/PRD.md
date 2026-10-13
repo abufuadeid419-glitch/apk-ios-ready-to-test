@@ -86,3 +86,4 @@ Clone the mobile app from https://github.com/abufuadeid419-glitch/apk-ios-code.g
   - Accountant read-only: HTTP router blocks every non-GET for ACCOUNTANT (except /auth, /notifications); UI hides collect/void. New /journal screen (owner+acct) + GET /api/accounting/journal (all docs with lines, details, debit/credit accounts) + CSV export.
   - Android safe areas: navigationBarTranslucent on all Modals, AgentMapSheet bottom inset, blocked screen insets.
   - Backup now PDF only (src/backupPdf.ts): readable business data, no ids/codes.
+- 2026-06: Offline Sync Report — offline.ts keeps persisted synced history (last 200, H_KEY) + lastSyncAt; SyncReportSheet (src/components/SyncReport.tsx) with tabs pending/failed/synced, opened from header sync badge and SyncBanner; green 'تمت مزامنة N عملية · عرض التقرير' banner for 12s after reconnect.
